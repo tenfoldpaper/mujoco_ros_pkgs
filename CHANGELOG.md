@@ -12,6 +12,7 @@ Loading and reset times are reported in the server debug log. All plugin stats c
 ### Fixed
 * Added missing call to render callbacks in viewer. While the callbacks were still being run for offscreen rendering, the viewer did not render additional geoms added by plugins.
 * *mujoco_ros_control*: fixed sometimes using wrong joint id in default hardware interface (would only be correct, if the joints appear first and in the same order in the compiled MuJoCo model).
+* *mujoco_ros_sensors*: now skipping user sensors, as they should be handled in separate, dedicated plugins.
 
 ### Changed
 * Moved `mujoco_ros::Viewer::Clock` definition to `mujoco_ros::Clock` (into common_types.h).
