@@ -815,14 +815,6 @@ bool MujocoEnv::initModelFromQueue()
 		}
 	}
 
-	int vfs_id              = mj_findFileVFS(&vfs_, "model_string");
-	size_t filecontent_size = 0;
-	if (vfs_id > -1) {
-		filecontent_size = vfs_.filesize[vfs_id];
-	}
-
-	char *filedata_backup = new char[filecontent_size];
-
 	if (is_file) {
 		ROS_DEBUG("\tModel is a regular file. Loading from filesystem");
 	} else if (queued_filename_[0] != '\0') { // new model string
@@ -831,16 +823,7 @@ bool MujocoEnv::initModelFromQueue()
 		ROS_WARN("Loading nested resources (textures, meshes, ...) from string is broken since 2.3.4. A fix is on the "
 		         "way (see https://github.com/deepmind/mujoco/discussions/957#discussion-5348269)");
 
-		if (vfs_id > -1) {
-			ROS_DEBUG("\tBacking up old string content");
-			memcpy(filedata_backup, vfs_.filedata[vfs_id], filecontent_size);
-		}
-
-		mju::strcpy_arr(queued_filename_, "model_string");
-		mj_deleteFileVFS(&vfs_, "model_string");
-		mj_makeEmptyFileVFS(&vfs_, "model_string", mju::strlen_arr(queued_filename_));
-		int file_idx = mj_findFileVFS(&vfs_, "model_string");
-		memcpy(vfs_.filedata[file_idx], queued_filename_, mju::strlen_arr(queued_filename_));
+		mj_addBufferVFS(&vfs_, "model_testing", queued_filename_, mju::strlen_arr(queued_filename_));
 		ROS_DEBUG("\tSaved string content to VFS");
 	}
 
@@ -853,7 +836,7 @@ bool MujocoEnv::initModelFromQueue()
 			mnew = mj_loadXML(queued_filename_, nullptr, load_error_, kErrorLength);
 		} else {
 			ROS_DEBUG("\tLoading virtual file from VFS");
-			mnew = mj_loadXML(queued_filename_, &vfs_, load_error_, kErrorLength);
+			mnew = mj_loadXML("model_testing", &vfs_, load_error_, kErrorLength);
 		}
 	}
 
@@ -862,17 +845,12 @@ bool MujocoEnv::initModelFromQueue()
 	}
 
 	if (!mnew) {
-		ROS_ERROR_STREAM("Loading model from file failed: " << load_error_);
+		ROS_ERROR_STREAM("Loading new model failed: " << load_error_);
 		ROS_DEBUG("\tRolling back old model");
 
-		if (!is_file && filecontent_size > 0) {
-			mj_deleteFileVFS(&vfs_, "model_string");
-			mj_makeEmptyFileVFS(&vfs_, "model_string", filecontent_size);
-			int file_idx = mj_findFileVFS(&vfs_, "model_string");
-			memcpy(vfs_.filedata[file_idx], filedata_backup, filecontent_size);
-			ROS_DEBUG("\tRestored string content to VFS");
+		if (!is_file) {
+			mj_deleteFileVFS(&vfs_, "model_testing");
 		}
-		delete[] filedata_backup;
 
 		// 'clear' new filename
 		queued_filename_[0] = '\0';
@@ -884,11 +862,17 @@ bool MujocoEnv::initModelFromQueue()
 	ROS_DEBUG("Model compiled successfully");
 	dnew = mj_makeData(mnew);
 
+	if (!is_file) {
+		ROS_DEBUG("\tAdding new model permanently to VFS");
+		std::size_t length = mju::strlen_arr(queued_filename_);
+		mj_addBufferVFS(&vfs_, "model_string", queued_filename_, length);
+		mj_deleteFileVFS(&vfs_, "model_testing");
+	}
+
 	// 'clear' filename in queue
 	mju::strcpy_arr(filename_, queued_filename_);
 	queued_filename_[0] = '\0';
 	// delete allocated memory for VFS backup
-	delete[] filedata_backup;
 
 	// Compiler warning: print and pause
 	if (load_error_[0]) {

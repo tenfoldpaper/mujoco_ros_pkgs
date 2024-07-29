@@ -1933,13 +1933,12 @@ void Viewer::Sync()
 
 	if (pending_.load_key) {
 		int i = this->key;
+		// Backup current time
+		mjtNum tmp_time = d_->time;
 		// TODO(dleins): Should resetting to a keypoint remain allowed?
-		mju_copy(d_->qpos, m_->key_qpos + i * m_->nq, m_->nq);
-		mju_copy(d_->qvel, m_->key_qvel + i * m_->nv, m_->nv);
-		mju_copy(d_->act, m_->key_act + i * m_->na, m_->na);
-		mju_copy(d_->mocap_pos, m_->key_mpos + i * 3 * m_->nmocap, 3 * m_->nmocap);
-		mju_copy(d_->mocap_quat, m_->key_mquat + i * 4 * m_->nmocap, 4 * m_->nmocap);
-		mju_copy(d_->ctrl, m_->key_ctrl + i * m_->nu, m_->nu);
+		mj_resetDataKeyframe(m_.get(), d_.get(), i);
+		// Set time back to the original value
+		d_->time = tmp_time;
 		mj_forward(m_.get(), d_.get());
 		update_profiler   = true;
 		update_sensor     = true;
@@ -1948,14 +1947,7 @@ void Viewer::Sync()
 
 	if (pending_.save_key) {
 		int i = this->key;
-		// Look up Keypoint saving in MuJoCo ROS
-		m_->key_time[i] = d_->time;
-		mju_copy(m_->key_qpos + i * m_->nq, d_->qpos, m_->nq);
-		mju_copy(m_->key_qvel + i * m_->nv, d_->qvel, m_->nv);
-		mju_copy(m_->key_act + i * m_->na, d_->act, m_->na);
-		mju_copy(m_->key_mpos + i * 3 * m_->nmocap, d_->mocap_pos, 3 * m_->nmocap);
-		mju_copy(m_->key_mquat + i * 4 * m_->nmocap, d_->mocap_quat, 4 * m_->nmocap);
-		mju_copy(m_->key_ctrl + i * m_->nu, d_->ctrl, m_->nu);
+		mj_setKeyframe(m_.get(), d_.get(), i);
 		pending_.save_key = false;
 	}
 

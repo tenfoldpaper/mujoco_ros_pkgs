@@ -59,6 +59,12 @@ public:
 	int getNumCBReadyPlugins() { return cb_ready_plugins_.size(); }
 	void notifyGeomChange() { notifyGeomChanged(0); }
 
+	void load_filename(std::string filename)
+	{
+		mju::strcpy_arr(queued_filename_, filename.c_str());
+		settings_.load_request = 2;
+	}
+
 	void shutdown()
 	{
 		settings_.exit_request = 1;
