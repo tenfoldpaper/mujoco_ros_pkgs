@@ -45,7 +45,8 @@ namespace mujoco_ros {
 OffscreenRenderContext::~OffscreenRenderContext()
 {
 	if (window != nullptr) {
-		glfwMakeContextCurrent(window.get());
+		// Making context current before calling mjr_freeContext causes a bad access error
+		// Let glfwTerminate() handle the cleanup then
 		ROS_DEBUG("Freeing offscreen context");
 		mjr_freeContext(&con);
 	}
