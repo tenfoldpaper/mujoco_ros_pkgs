@@ -39,6 +39,7 @@ add_library(${PROJECT_NAME}
   offscreen_camera.cpp
   offscreen_rendering.cpp
   callbacks.cpp
+  physics.cpp
 )
 
 target_include_directories(${PROJECT_NAME}

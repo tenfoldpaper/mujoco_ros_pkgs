@@ -378,6 +378,18 @@ protected:
 	 */
 	void physicsLoop();
 
+	using Clock = std::chrono::steady_clock;
+
+	/**
+	 * @brief physics step when sim is running.
+	 */
+	void simUnpausedPhysics(mjtNum &syncSim, std::chrono::time_point<Clock> &syncCPU);
+
+	/**
+	 * @brief physics step when sim is paused.
+	 */
+	void simPausedPhysics(mjtNum &syncSim);
+
 	/**
 	 * @brief Handles requests from other threads (viewers).
 	 */
