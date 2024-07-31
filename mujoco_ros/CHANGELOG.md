@@ -14,6 +14,7 @@
 * Updated CI actions (#33).
 * Fixed linking order for mujoco_ros_mocap tests (#33).
 * Fixed glx BadAccess error on exit when running with GUI.
+* Fixed bug where stepping multiple times to get up to speed with the desired realtime factor would only happen if a viewer was attached.
 
 ### Changed
 * replaced `boost::shared_ptr` with `std::shared_ptr` or `std::unique_ptr` wherever possible (ROS 1 fast intra-process message-passing requires boost::shared_ptr).

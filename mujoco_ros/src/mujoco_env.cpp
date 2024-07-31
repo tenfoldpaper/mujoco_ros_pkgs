@@ -532,8 +532,8 @@ void MujocoEnv::physicsLoop()
 						while ((settings_.real_time_index == 0 ||
 						        Seconds((data_->time - syncSim) * slowdown) < mujoco_ros::Viewer::Clock::now() - syncCPU) &&
 						       (mujoco_ros::Viewer::Clock::now() - startCPU <
-						            Seconds(mujoco_ros::Viewer::render_ui_rate_lower_bound_) &&
-						        !connected_viewers_.empty()) && // only break if rendering UI is actually necessary
+						            Seconds(mujoco_ros::Viewer::render_ui_rate_lower_bound_) ||
+						        connected_viewers_.empty()) && // only break if rendering UI is actually necessary
 						       !settings_.exit_request.load() &&
 						       num_steps_until_exit_ != 0) {
 							// measure slowdown before first step
