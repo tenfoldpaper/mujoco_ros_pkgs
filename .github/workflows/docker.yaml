@@ -22,7 +22,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        ROS_DISTRO: [noetic, jammy]
+        ROS_DISTRO: [noetic, one]
     runs-on: ubuntu-latest
     permissions:
       packages: write
@@ -58,8 +58,9 @@ jobs:
           file: .docker/Dockerfile
           build-args: |
             ROS_DISTRO=${{ matrix.ROS_DISTRO }}
+            BASE_DOCKER_NAME=${{ matrix.ROS_DISTRO == 'one' && 'jammy' || matrix.ROS_DISTRO }}
             MUJOCO_VERSIONS=${{ env.MUJOCO_VERSIONS }}
-            IMAGE_PREFIX=${{ matrix.ROS_DISTRO == 'jammy' && 'ubiagni/' || '' }}
+            IMAGE_PREFIX=${{ matrix.ROS_DISTRO == 'one' && 'ubiagni/' || '' }}
           push: true
           no-cache: ${{ steps.apt.outputs.no_cache || github.event_name == 'workflow_dispatch' }}
           cache-from: type=registry,ref=${{ env.IMAGE }}
