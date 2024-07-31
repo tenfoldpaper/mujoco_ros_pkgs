@@ -615,6 +615,7 @@ bool MujocoEnv::initModelFromQueue()
 		ROS_DEBUG("\tSaved string content to VFS");
 	}
 
+	auto load_start = Viewer::Clock::now();
 	if (is_mjb) {
 		ROS_DEBUG("\tLoading mjb file");
 		mnew = mj_loadModel(queued_filename_, nullptr);
@@ -625,6 +626,16 @@ bool MujocoEnv::initModelFromQueue()
 		} else {
 			ROS_DEBUG("\tLoading virtual file from VFS");
 			mnew = mj_loadXML("model_testing", &vfs_, load_error_, kErrorLength);
+		}
+	}
+
+	auto load_interval  = Viewer::Clock::now() - load_start;
+	double load_seconds = Seconds(load_interval).count();
+
+	if (!load_error_[0]) {
+		ROS_INFO_STREAM("Model loaded in " << load_seconds << " seconds");
+		if (load_seconds > 0.25) {
+			mju::sprintf_arr(load_error_, "Model loaded in %.2g seconds", load_seconds);
 		}
 	}
 

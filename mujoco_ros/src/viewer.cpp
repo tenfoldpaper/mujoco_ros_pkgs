@@ -534,18 +534,19 @@ void ShowSensor(mujoco_ros::Viewer *viewer, mjrRect rect)
 }
 
 // load state from history buffer
-static void LoadScrubState(mujoco_ros::Viewer *viewer)
+static void LoadScrubState(mujoco_ros::Viewer * /*viewer*/)
 {
-	// get index into circular buffer
-	int i = (viewer->scrub_index + viewer->history_cursor_) % viewer->nhistory_;
-	i     = (i + viewer->nhistory_) % viewer->nhistory_;
+	ROS_WARN("Stepping backwards currently not supported!");
+	// // get index into circular buffer
+	// int i = (viewer->scrub_index + viewer->history_cursor_) % viewer->nhistory_;
+	// i     = (i + viewer->nhistory_) % viewer->nhistory_;
 
-	// load state
-	mjtNum *state = &viewer->history_[i * viewer->state_size_];
-	mj_setState(viewer->m_.get(), viewer->d_.get(), state, mjSTATE_INTEGRATION);
+	// // load state
+	// mjtNum *state = &viewer->history_[i * viewer->state_size_];
+	// mj_setState(viewer->m_.get(), viewer->d_.get(), state, mjSTATE_INTEGRATION);
 
-	// call forward dynamics
-	mj_forward(viewer->m_.get(), viewer->d_.get());
+	// // call forward dynamics
+	// mj_forward(viewer->m_.get(), viewer->d_.get());
 }
 
 // update an entire section of ui0
@@ -658,16 +659,16 @@ void UpdateWatch(mujoco_ros::Viewer *viewer, const mjModel *m, const mjData *d)
 }
 
 // make physics section of UI
-void MakePhysicsSection(mujoco_ros::Viewer *viewer, int oldstate)
+void MakePhysicsSection(mujoco_ros::Viewer *viewer)
 {
 	mjOption *opt                = viewer->is_passive_ ? &viewer->scnstate_.model.opt : &viewer->m_->opt;
-	mjuiDef defPhysics[]         = { { mjITEM_SECTION, "Physics", oldstate, nullptr, "AP" },
+	mjuiDef defPhysics[]         = { { mjITEM_SECTION, "Physics", mjPRESERVE, nullptr, "AP" },
 		                              { mjITEM_SELECT, "Integrator", 2, &(opt->integrator),
 		                                "Euler\nRK4\nimplicit\nimplicitfast" },
 		                              { mjITEM_SELECT, "Cone", 2, &(opt->cone), "Pyramidal\nElliptic" },
 		                              { mjITEM_SELECT, "Jacobian", 2, &(opt->jacobian), "Dense\nSparse\nAuto" },
 		                              { mjITEM_SELECT, "Solver", 2, &(opt->solver), "PGS\nCG\nNewton" },
-		                              { mjITEM_SEPARATOR, "Algorithmic Parameters", 1 },
+		                              { mjITEM_SEPARATOR, "Algorithmic Parameters", mjPRESERVE },
 		                              { mjITEM_EDITNUM, "Timestep", 2, &(opt->timestep), "1 0 1" },
 		                              { mjITEM_EDITINT, "Iterations", 2, &(opt->iterations), "1 0 1000" },
 		                              { mjITEM_EDITNUM, "Tolerance", 2, &(opt->tolerance), "1 0 1" },
@@ -680,17 +681,17 @@ void MakePhysicsSection(mujoco_ros::Viewer *viewer, int oldstate)
 		                              { mjITEM_EDITNUM, "API Rate", 2, &(opt->apirate), "1 0 1000" },
 		                              { mjITEM_EDITINT, "SDF Iter", 2, &(opt->sdf_iterations), "1 1 20" },
 		                              { mjITEM_EDITINT, "SDF Init", 2, &(opt->sdf_initpoints), "1 1 100" },
-		                              { mjITEM_SEPARATOR, "Physical Parameters", 1 },
+		                              { mjITEM_SEPARATOR, "Physical Parameters", mjPRESERVE },
 		                              { mjITEM_EDITNUM, "Gravity", 2, opt->gravity, "3" },
 		                              { mjITEM_EDITNUM, "Wind", 2, opt->wind, "3" },
 		                              { mjITEM_EDITNUM, "Magnetic", 2, opt->magnetic, "3" },
 		                              { mjITEM_EDITNUM, "Density", 2, &(opt->density), "1" },
 		                              { mjITEM_EDITNUM, "Viscosity", 2, &(opt->viscosity), "1" },
 		                              { mjITEM_EDITNUM, "Imp Ratio", 2, &(opt->impratio), "1" },
-		                              { mjITEM_SEPARATOR, "Disable Flags", 1 },
+		                              { mjITEM_SEPARATOR, "Disable Flags", mjPRESERVE },
 		                              { mjITEM_END } };
-	mjuiDef defEnableFlags[]     = { { mjITEM_SEPARATOR, "Enable Flags", 1 }, { mjITEM_END } };
-	mjuiDef defOverride[]        = { { mjITEM_SEPARATOR, "Contact Override", 1 },
+	mjuiDef defEnableFlags[]     = { { mjITEM_SEPARATOR, "Enable Flags", mjPRESERVE }, { mjITEM_END } };
+	mjuiDef defOverride[]        = { { mjITEM_SEPARATOR, "Contact Override", mjPRESERVE },
 		                              { mjITEM_EDITNUM, "Margin", 2, &(opt->o_margin), "1" },
 		                              { mjITEM_EDITNUM, "Sol Imp", 2, &(opt->o_solimp), "5" },
 		                              { mjITEM_EDITNUM, "Sol Ref", 2, &(opt->o_solref), "2" },
@@ -727,12 +728,25 @@ void MakePhysicsSection(mujoco_ros::Viewer *viewer, int oldstate)
 
 	// add actuator enable/disable
 	mjui_add(&viewer->ui0, defDisableActuator);
+
+	// make some subsections closed by default
+	for (int i = 0; i < viewer->ui0.sect[SECT_PHYSICS].nitem; i++) {
+		mjuiItem *item = viewer->ui0.sect[SECT_PHYSICS].item + i;
+
+		// close less useful subsections
+		if (item->type == mjITEM_SEPARATOR) {
+			if (mju::strcmp_arr(item->name, "Actuator Group Enable") || mju::strcmp_arr(item->name, "Contact Override") ||
+			    mju::strcmp_arr(item->name, "Physical Parameters")) {
+				item->state = mjSEPCLOSED + 1;
+			}
+		}
+	}
 }
 
 // make rendering section of UI
-void MakeRenderingSection(mujoco_ros::Viewer *viewer, const mjModel *m, int oldstate)
+void MakeRenderingSection(mujoco_ros::Viewer *viewer, const mjModel *m)
 {
-	mjuiDef defRendering[] = { { mjITEM_SECTION, "Rendering", oldstate, nullptr, "AR" },
+	mjuiDef defRendering[] = { { mjITEM_SECTION, "Rendering", mjPRESERVE, nullptr, "AR" },
 		                        { mjITEM_SELECT, "Camera", 2, &(viewer->camera), "Free\nTracking" },
 		                        { mjITEM_SELECT, "Label", 2, &(viewer->opt.label),
 		                          "None\nBody\nJoint\nGeom\nSite\nCamera\nLight\nTendon\n"
@@ -806,25 +820,26 @@ void MakeRenderingSection(mujoco_ros::Viewer *viewer, const mjModel *m, int olds
 }
 
 // make visualization section of UI
-void MakeVisualizationSection(mujoco_ros::Viewer *viewer, const mjModel * /*m*/, int oldstate)
+void MakeVisualizationSection(mujoco_ros::Viewer *viewer, const mjModel * /*m*/)
 {
 	mjStatistic *stat = viewer->is_passive_ ? &viewer->scnstate_.model.stat : &viewer->m_->stat;
 	mjVisual *vis     = viewer->is_passive_ ? &viewer->scnstate_.model.vis : &viewer->m_->vis;
 
-	mjuiDef defVisualization[] = { { mjITEM_SECTION, "Visualization", oldstate, nullptr, "AV" },
+	mjuiDef defVisualization[] = { { mjITEM_SECTION, "Visualization", mjPRESERVE, nullptr, "AV" },
 		                            { mjITEM_SEPARATOR, "Headlight", 1 },
 		                            { mjITEM_RADIO, "Active", 5, &(vis->headlight.active), "Off\nOn" },
 		                            { mjITEM_EDITFLOAT, "Ambient", 2, &(vis->headlight.ambient), "3" },
 		                            { mjITEM_EDITFLOAT, "Diffuse", 2, &(vis->headlight.diffuse), "3" },
 		                            { mjITEM_EDITFLOAT, "Specular", 2, &(vis->headlight.specular), "3" },
-		                            { mjITEM_SEPARATOR, "Initial Free Camera", 1 },
+		                            { mjITEM_SEPARATOR, "Free Camera", 1 },
+		                            { mjITEM_RADIO, "Orthographic", 2, &(vis->global.orthographic), "No\nYes" },
+		                            { mjITEM_EDITFLOAT, "Field of view", 2, &(vis->global.fovy), "1" },
 		                            { mjITEM_EDITNUM, "Center", 2, &(stat->center), "3" },
 		                            { mjITEM_EDITFLOAT, "Azimuth", 2, &(vis->global.azimuth), "1" },
 		                            { mjITEM_EDITFLOAT, "Elevation", 2, &(vis->global.elevation), "1" },
 		                            { mjITEM_BUTTON, "Align", 2, nullptr, "CA" },
 		                            { mjITEM_SEPARATOR, "Global", 1 },
 		                            { mjITEM_EDITNUM, "Extent", 2, &(stat->extent), "1" },
-		                            { mjITEM_EDITFLOAT, "Field of view", 2, &(vis->global.fovy), "1" },
 		                            { mjITEM_RADIO, "Inertia", 5, &(vis->global.ellipsoidinertia), "Box\nEllipsoid" },
 		                            { mjITEM_RADIO, "BVH active", 5, &(vis->global.bvactive), "False\nTrue" },
 		                            { mjITEM_SEPARATOR, "Map", 1 },
@@ -840,8 +855,8 @@ void MakeVisualizationSection(mujoco_ros::Viewer *viewer, const mjModel * /*m*/,
 		                            { mjITEM_EDITFLOAT, "Haze", 2, &(vis->map.haze), "1" },
 		                            { mjITEM_EDITFLOAT, "Shadow clip", 2, &(vis->map.shadowclip), "1" },
 		                            { mjITEM_EDITFLOAT, "Shadow scale", 2, &(vis->map.shadowscale), "1" },
-		                            { mjITEM_SEPARATOR, "Scale", 1 },
-		                            { mjITEM_EDITNUM, "All [meansize]", 2, &(stat->meansize), "1" },
+		                            { mjITEM_SEPARATOR, "Scale", mjPRESERVE },
+		                            { mjITEM_EDITNUM, "All (meansize)", 2, &(stat->meansize), "1" },
 		                            { mjITEM_EDITFLOAT, "Force width", 2, &(vis->scale.forcewidth), "1" },
 		                            { mjITEM_EDITFLOAT, "Contact width", 2, &(vis->scale.contactwidth), "1" },
 		                            { mjITEM_EDITFLOAT, "Contact height", 2, &(vis->scale.contactheight), "1" },
@@ -858,16 +873,41 @@ void MakeVisualizationSection(mujoco_ros::Viewer *viewer, const mjModel * /*m*/,
 		                            { mjITEM_EDITFLOAT, "Frame width", 2, &(vis->scale.framewidth), "1" },
 		                            { mjITEM_EDITFLOAT, "Constraint", 2, &(vis->scale.constraint), "1" },
 		                            { mjITEM_EDITFLOAT, "Slider-crank", 2, &(vis->scale.slidercrank), "1" },
+		                            { mjITEM_SEPARATOR, "RGBA", mjPRESERVE },
+		                            { mjITEM_EDITFLOAT, "fog", 2, &(vis->rgba.fog), "4" },
+		                            { mjITEM_EDITFLOAT, "haze", 2, &(vis->rgba.haze), "4" },
+		                            { mjITEM_EDITFLOAT, "force", 2, &(vis->rgba.force), "4" },
+		                            { mjITEM_EDITFLOAT, "inertia", 2, &(vis->rgba.inertia), "4" },
+		                            { mjITEM_EDITFLOAT, "joint", 2, &(vis->rgba.joint), "4" },
+		                            { mjITEM_EDITFLOAT, "actuator", 2, &(vis->rgba.actuator), "4" },
+		                            { mjITEM_EDITFLOAT, "actnegative", 2, &(vis->rgba.actuatornegative), "4" },
+		                            { mjITEM_EDITFLOAT, "actpositive", 2, &(vis->rgba.actuatorpositive), "4" },
+		                            { mjITEM_EDITFLOAT, "com", 2, &(vis->rgba.com), "4" },
+		                            { mjITEM_EDITFLOAT, "camera", 2, &(vis->rgba.camera), "4" },
+		                            { mjITEM_EDITFLOAT, "light", 2, &(vis->rgba.light), "4" },
+		                            { mjITEM_EDITFLOAT, "selectpoint", 2, &(vis->rgba.selectpoint), "4" },
+		                            { mjITEM_EDITFLOAT, "connect", 2, &(vis->rgba.connect), "4" },
+		                            { mjITEM_EDITFLOAT, "contactpoint", 2, &(vis->rgba.contactpoint), "4" },
+		                            { mjITEM_EDITFLOAT, "contactforce", 2, &(vis->rgba.contactforce), "4" },
+		                            { mjITEM_EDITFLOAT, "contactfriction", 2, &(vis->rgba.contactfriction), "4" },
+		                            { mjITEM_EDITFLOAT, "contacttorque", 2, &(vis->rgba.contacttorque), "4" },
+		                            { mjITEM_EDITFLOAT, "contactgap", 2, &(vis->rgba.contactgap), "4" },
+		                            { mjITEM_EDITFLOAT, "rangefinder", 2, &(vis->rgba.rangefinder), "4" },
+		                            { mjITEM_EDITFLOAT, "constraint", 2, &(vis->rgba.constraint), "4" },
+		                            { mjITEM_EDITFLOAT, "slidercrank", 2, &(vis->rgba.slidercrank), "4" },
+		                            { mjITEM_EDITFLOAT, "crankbroken", 2, &(vis->rgba.crankbroken), "4" },
+		                            { mjITEM_EDITFLOAT, "frustum", 2, &(vis->rgba.frustum), "4" },
+		                            { mjITEM_EDITFLOAT, "bv", 2, &(vis->rgba.bvactive), "4" },
 		                            { mjITEM_END } };
 
-	// add rendering standard
+	// add visualization section
 	mjui_add(&viewer->ui0, defVisualization);
 }
 
 // make group section of UI
-void MakeGroupSection(mujoco_ros::Viewer *viewer, int oldstate)
+void MakeGroupSection(mujoco_ros::Viewer *viewer)
 {
-	mjuiDef defGroup[] = { { mjITEM_SECTION, "Group enable", oldstate, nullptr, "AG" },
+	mjuiDef defGroup[] = { { mjITEM_SECTION, "Group enable", mjPRESERVE, nullptr, "AG" },
 		                    { mjITEM_SEPARATOR, "Geom groups", 1 },
 		                    { mjITEM_CHECKBYTE, "Geom 0", 2, viewer->opt.geomgroup, " 0" },
 		                    { mjITEM_CHECKBYTE, "Geom 1", 2, viewer->opt.geomgroup + 1, " 1" },
@@ -924,9 +964,9 @@ void MakeGroupSection(mujoco_ros::Viewer *viewer, int oldstate)
 }
 
 // make joint section of UI
-void MakeJointSection(mujoco_ros::Viewer *viewer, int oldstate)
+void MakeJointSection(mujoco_ros::Viewer *viewer)
 {
-	mjuiDef defJoint[]  = { { mjITEM_SECTION, "Joint", oldstate, nullptr, "AJ" }, { mjITEM_END } };
+	mjuiDef defJoint[]  = { { mjITEM_SECTION, "Joint", mjPRESERVE, nullptr, "AJ" }, { mjITEM_END } };
 	mjuiDef defSlider[] = { { mjITEM_SLIDERNUM, "", 2, nullptr, "0 1" }, { mjITEM_END } };
 
 	// add section
@@ -972,9 +1012,9 @@ void MakeJointSection(mujoco_ros::Viewer *viewer, int oldstate)
 }
 
 // make control section of UI
-void MakeControlSection(mujoco_ros::Viewer *viewer, int oldstate)
+void MakeControlSection(mujoco_ros::Viewer *viewer)
 {
-	mjuiDef defControl[] = { { mjITEM_SECTION, "Control", oldstate, nullptr, "AC" },
+	mjuiDef defControl[] = { { mjITEM_SECTION, "Control", mjPRESERVE, nullptr, "AC" },
 		                      { mjITEM_BUTTON, "Clear all", 2 },
 		                      { mjITEM_END } };
 	mjuiDef defSlider[]  = { { mjITEM_SLIDERNUM, "", 2, nullptr, "0 1" }, { mjITEM_END } };
@@ -1026,35 +1066,17 @@ void MakeControlSection(mujoco_ros::Viewer *viewer, int oldstate)
 // make model-dependent UI sections
 void MakeUiSections(mujoco_ros::Viewer *viewer, const mjModel *m, const mjData * /*d*/)
 {
-	// get section open-close state, UI 0
-	int oldstate0[NSECT0];
-	for (int i = 0; i < NSECT0; i++) {
-		oldstate0[i] = 0;
-		if (viewer->ui0.nsect > i) {
-			oldstate0[i] = viewer->ui0.sect[i].state;
-		}
-	}
-
-	// get section open-close state, UI 1
-	int oldstate1[NSECT1];
-	for (int i = 0; i < NSECT1; i++) {
-		oldstate1[i] = 0;
-		if (viewer->ui1.nsect > i) {
-			oldstate1[i] = viewer->ui1.sect[i].state;
-		}
-	}
-
 	// clear model-dependent sections of UI
 	viewer->ui0.nsect = SECT_PHYSICS;
 	viewer->ui1.nsect = 0;
 
 	// make
-	MakePhysicsSection(viewer, oldstate0[SECT_PHYSICS]);
-	MakeRenderingSection(viewer, m, oldstate0[SECT_RENDERING]);
-	MakeVisualizationSection(viewer, m, oldstate0[SECT_VISUALIZATION]);
-	MakeGroupSection(viewer, oldstate0[SECT_GROUP]);
-	MakeJointSection(viewer, oldstate1[SECT_JOINT]);
-	MakeControlSection(viewer, oldstate1[SECT_CONTROL]);
+	MakePhysicsSection(viewer);
+	MakeRenderingSection(viewer, m);
+	MakeVisualizationSection(viewer, m);
+	MakeGroupSection(viewer);
+	MakeJointSection(viewer);
+	MakeControlSection(viewer);
 }
 
 //---------------------------------- utility functions ---------------------------------------------
@@ -1086,7 +1108,9 @@ void CopyPose(mujoco_ros::Viewer *viewer, const mjModel *m, const mjData *d)
 // millisecond timer, for MuJoCo built-in profiler
 mjtNum Timer()
 {
-	return Milliseconds(mujoco_ros::Viewer::Clock::now().time_since_epoch()).count();
+	static auto start = mujoco_ros::Viewer::Clock::now();
+	auto elapsed      = Milliseconds(mujoco_ros::Viewer::Clock::now() - start);
+	return elapsed.count();
 }
 
 // clear all times
@@ -1243,10 +1267,18 @@ void UiLayout(mjuiState *state)
 	rect[3].height = rect[0].height;
 }
 
+// modify UI
 void UiModify(mjUI *ui, mjuiState *state, mjrContext *con)
 {
 	mjui_resize(ui, con);
-	mjr_addAux(ui->auxid, ui->width, ui->maxheight, ui->spacing.samples, con);
+
+	// remake aux buffer only if missing or different
+	int id = ui->auxid;
+	if (con->auxFBO[id] == 0 || con->auxFBO_r[id] == 0 || con->auxColor[id] == 0 || con->auxColor_r[id] == 0 ||
+	    con->auxWidth[id] != ui->width || con->auxHeight[id] != ui->maxheight ||
+	    con->auxSamples[id] != ui->spacing.samples) {
+		mjr_addAux(ui->auxid, ui->width, ui->maxheight, ui->spacing.samples, con);
+	}
 	UiLayout(state);
 	mjui_update(-1, -1, ui, state, con);
 }
@@ -1341,6 +1373,7 @@ void UiEvent(mjuiState *state)
 					break;
 
 				case 11: // History scrubber
+					viewer->run                        = 0;
 					viewer->pending_.ui_update_run     = true;
 					viewer->pending_.load_from_history = true;
 					mjui0_update_section(viewer, SECT_SIMULATION);
@@ -1429,7 +1462,7 @@ void UiEvent(mjuiState *state)
 			// remake joint section if joint group changed
 			if (it->name[0] == 'J' && it->name[1] == 'o') {
 				viewer->ui1.nsect = SECT_JOINT;
-				MakeJointSection(viewer, viewer->ui1.sect[SECT_JOINT].state);
+				MakeJointSection(viewer);
 				viewer->ui1.nsect = NSECT1;
 				UiModify(&viewer->ui1, state, &viewer->platform_ui->mjr_context());
 			}
@@ -1525,6 +1558,7 @@ void UiEvent(mjuiState *state)
 			case mjKEY_PAGE_UP: // select parent body
 				if ((viewer->m_ || viewer->is_passive_) && viewer->pert.select > 0) {
 					viewer->pert.select     = viewer->body_parentid_[util::as_unsigned(viewer->pert.select)];
+					viewer->pert.flexselect = -1;
 					viewer->pert.skinselect = -1;
 
 					// stop perturbation if world reached
@@ -2209,6 +2243,7 @@ void Viewer::LoadOnRenderThread()
 	ctrl_.shrink_to_fit();
 	ctrl_prev_ = ctrl_;
 
+	// allocate history buffer: smaller of {2000 states, 100 MB}
 	if (!this->is_passive_) {
 		constexpr int kMaxHistoryBytes = 1e8;
 
@@ -2259,6 +2294,7 @@ void Viewer::LoadOnRenderThread()
 	// clear perturbation state
 	this->pert.active     = 0;
 	this->pert.select     = 0;
+	this->pert.flexselect = -1;
 	this->pert.skinselect = -1;
 
 	// align and scale view unless reloading the same file
@@ -2370,6 +2406,13 @@ void Viewer::Render()
 	}
 
 	// Update UI sections from last sync
+	if (pending_.ui_update_simulation) {
+		if (this->ui0_enable && this->ui0.sect[SECT_SIMULATION].state) {
+			mjui0_update_section(this, SECT_SIMULATION);
+		}
+		pending_.ui_update_simulation = false;
+	}
+
 	if (this->ui0_enable && this->ui0.sect[SECT_WATCH].state) {
 		mjui0_update_section(this, SECT_WATCH);
 	}
@@ -2393,7 +2436,7 @@ void Viewer::Render()
 		    (IsDifferent(opt_prev_.geomgroup, opt.geomgroup) || IsDifferent(opt_prev_.sitegroup, opt.sitegroup) ||
 		     IsDifferent(opt_prev_.jointgroup, opt.jointgroup) || IsDifferent(opt_prev_.tendongroup, opt.tendongroup) ||
 		     IsDifferent(opt_prev_.actuatorgroup, opt.actuatorgroup) || IsDifferent(opt_prev_.flexgroup, opt.flexgroup) ||
-		     IsDifferent(opt_prev_.skingroup, opt.skingroup))) {
+		     IsDifferent(opt_prev_.flexgroup, opt.flexgroup) || IsDifferent(opt_prev_.skingroup, opt.skingroup))) {
 			mjui0_update_section(this, SECT_GROUP);
 		}
 
@@ -2418,7 +2461,7 @@ void Viewer::Render()
 	if (pending_.ui_remake_ctrl) {
 		if (this->ui1_enable && this->ui1.sect[SECT_CONTROL].state) {
 			this->ui1.nsect = SECT_CONTROL;
-			MakeControlSection(this, this->ui1.sect[SECT_CONTROL].state);
+			MakeControlSection(this);
 			this->ui1.nsect = NSECT1;
 			UiModify(&this->ui1, &this->uistate, &this->platform_ui->mjr_context());
 		}
@@ -2600,12 +2643,15 @@ void Viewer::RenderLoop()
 	this->platform_ui->SetEventCallback(UiEvent);
 	this->platform_ui->SetLayoutCallback(UiLayout);
 
-	// Populate UIs with standard sections
+	// Populate UIs with standard sections, open some sections initially
 	this->ui0.userdata = this;
 	this->ui1.userdata = this;
 	mjui_add(&this->ui0, defFile);
 	mjui_add(&this->ui0, this->def_option);
 	mjui_add(&this->ui0, this->def_simulation);
+	this->ui0.sect[0].state = 1;
+	this->ui0.sect[1].state = 1;
+	this->ui0.sect[2].state = 1;
 	mjui_add(&this->ui0, this->def_watch);
 	UiModify(&this->ui0, &this->uistate, &this->platform_ui->mjr_context());
 	UiModify(&this->ui1, &this->uistate, &this->platform_ui->mjr_context());

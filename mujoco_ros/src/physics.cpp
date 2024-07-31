@@ -150,7 +150,7 @@ void MujocoEnv::simUnpausedPhysics(mjtNum &syncSim, std::chrono::time_point<mujo
 	double slowdown = 100 / percentRealTime[settings_.real_time_index];
 
 	// Misalignment condition: distance from target sim time is bigger than syncsimalign
-	bool misaligned = mju_abs(Seconds(elapsedCPU).count() / slowdown - elapsedSim) > syncMisalign;
+	bool misaligned = std::abs(Seconds(elapsedCPU).count() / slowdown - elapsedSim) > syncMisalign;
 
 	// Out-of-sync (for any reason): reset sync times, step
 	if (elapsedSim < 0 || elapsedCPU.count() < 0 || syncCPU.time_since_epoch().count() == 0 || misaligned ||
