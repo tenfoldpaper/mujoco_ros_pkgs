@@ -1,5 +1,5 @@
-<a name="unreleased"></a>
-## Unreleased
+<a name="0.9.0"></a>
+## [0.9.0] - 2024-07-31
 
 ### Added
 * Mocap plugin to programmatically control mocap bodies.
@@ -262,7 +262,7 @@ Contributors: @DavidPL1, @balandbal
 
 Contributors: @DavidPL1
 
-[unreleased]: https://github.com/ubi-agni/mujoco_ros_pkgs/compare/0.8.0...HEAD
+[0.9.0]: https://github.com/ubi-agni/mujoco_ros_pkgs/compare/0.8.0...0.9.0
 [0.8.0]: https://github.com/ubi-agni/mujoco_ros_pkgs/compare/0.7.0...0.8.0
 [0.7.0]: https://github.com/ubi-agni/mujoco_ros_pkgs/compare/0.6.0...0.7.0
 [0.6.0]: https://github.com/ubi-agni/mujoco_ros_pkgs/compare/0.5.0...0.6.0
