@@ -1,6 +1,9 @@
 <a name="unreleased"></a>
 ## Unreleased
 
+### Added
+* Now it's possible to use MuJoCos intenal threadpool to speed up simulation. The number ob threads can be set with either `mujoco_threads` in the server launchfile or directly with `num_mj_threads` for the server node. If a number above 1 is used, multithreading is enabled. MuJoCo will then use the threadpool for parallel computations in the engine itself, but also plugins may use the threadpool to dispatch tasks (via (mjTask)[https://mujoco.readthedocs.io/en/3.2.0/APIreference/APItypes.html#mjtask] and (mju_threadPoolEnqueue)[https://mujoco.readthedocs.io/en/3.2.0/APIreference/APIfunctions.html#mju-threadpoolenqueue]). The default is `min(#available_threads - 1, 4)`.
+
 ### Fixed
 * Added missing call to render callbacks in viewer. While the callbacks were still being run for offscreen rendering, the viewer did not render additional geoms added by plugins.
 

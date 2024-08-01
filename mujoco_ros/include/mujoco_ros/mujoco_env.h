@@ -422,6 +422,8 @@ protected:
 	 * @brief Replace the current model and data with new ones and complete the loading process.
 	 */
 	void loadWithModelAndData();
+
+	mjThreadPool *threadpool_ = nullptr;
 };
 
 } // end namespace mujoco_ros

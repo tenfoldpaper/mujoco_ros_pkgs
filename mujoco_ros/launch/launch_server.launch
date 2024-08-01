@@ -18,8 +18,8 @@
   <arg name="realtime"             default=""      doc="Fraction of desired realtime (0,1]. -1 to run as fast as possible." />
   <arg name="profile"              default="false" doc="Whether mujoco_ros should be profiled." />
   <arg name="num_sim_steps"        default="-1" />
-  <arg name="num_instances"        default="1"     doc="Number of simulations to run (DEPRECATED)." />
   <arg name="mujoco_plugin_config" default=""      doc="Optionally provide the path to a yaml with plugin configurations to load." />
+  <arg name="mujoco_threads"       default="1"     doc="Number of threads to use in the MuJoCo simulation." />
 
   <arg name="modelfile"            default="$(find mujoco_ros)/assets/pendulum_world.xml"        doc="MuJoCo xml file to load. Should define robot model and world." />
   <arg name="initial_joint_states" default="$(find mujoco_ros)/config/initial_joint_states.yaml" doc="Provide a filepath containing initial joint states to load." />
@@ -50,7 +50,7 @@
         <param name="modelfile"            value="$(arg modelfile)" />
         <param name="wait_for_xml"         value="$(arg wait_for_xml)" />
         <param name="realtime"             value="$(arg realtime)" />
-        <param name="num_simulations"      value="$(arg num_instances)" />
+        <param name="num_mj_threads"       value="$(arg mujoco_threads)" />
         <rosparam file="$(arg initial_joint_states)" subst_value="true" />
       </node>
     </group>
@@ -66,7 +66,7 @@
         <param name="modelfile"            value="$(arg modelfile)" />
         <param name="wait_for_xml"         value="$(arg wait_for_xml)" />
         <param name="realtime"             value="$(arg realtime)" />
-        <param name="num_simulations"      value="$(arg num_instances)" />
+        <param name="num_mj_threads"       value="$(arg mujoco_threads)" />
         <rosparam file="$(arg initial_joint_states)" subst_value="true" />
       </node>
     </group>
@@ -85,7 +85,7 @@
         <param name="modelfile"            value="$(arg modelfile)" />
         <param name="wait_for_xml"         value="$(arg wait_for_xml)" />
         <param name="realtime"             value="$(arg realtime)" />
-        <param name="num_simulations"      value="$(arg num_instances)" />
+        <param name="num_mj_threads"       value="$(arg mujoco_threads)" />
         <rosparam file="$(arg initial_joint_states)" subst_value="true" />
       </node>
     </group>
@@ -104,7 +104,7 @@
         <param name="modelfile"            value="$(arg modelfile)" />
         <param name="wait_for_xml"         value="$(arg wait_for_xml)" />
         <param name="realtime"             value="$(arg realtime)" />
-        <param name="num_simulations"      value="$(arg num_instances)" />
+        <param name="num_mj_threads"       value="$(arg mujoco_threads)" />
         <rosparam file="$(arg initial_joint_states)" subst_value="true" />
       </node>
     </group>

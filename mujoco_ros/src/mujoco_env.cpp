@@ -142,6 +142,18 @@ MujocoEnv::MujocoEnv(const std::string &admin_hash /* = std::string()*/)
 	nh_->param<int>("num_steps", num_steps_until_exit_, -1);
 	ROS_INFO_STREAM_COND(num_steps_until_exit_ > 0, "Sim will terminate after " << num_steps_until_exit_ << " steps");
 
+	int num_threads;
+	nh_->param<int>("num_mj_threads", num_threads, 4);
+	int available_threads = std::thread::hardware_concurrency() - 1;
+	num_threads           = std::min(num_threads, available_threads);
+	if (num_threads > 1) {
+		threadpool_ = mju_threadPoolCreate(num_threads);
+		ROS_INFO_STREAM("Using MuJoCo threadpool size of " << num_threads << " (max available: " << available_threads
+		                                                   << ")");
+	} else {
+		ROS_INFO_STREAM("Running MuJoCo in single-threaded mode (" << available_threads << " threads available)");
+	}
+
 	// init VFS
 	mj_defaultVFS(&vfs_);
 
@@ -548,6 +560,10 @@ void MujocoEnv::loadWithModelAndData()
 	model_.reset(mnew, mj_deleteModel);
 	data_.reset(dnew, mj_deleteData);
 
+	if (threadpool_ != nullptr) {
+		mju_bindThreadPool(data_.get(), threadpool_);
+	}
+
 	prepareReload();
 	completeEnvSetup();
 
@@ -764,6 +780,10 @@ MujocoEnv::~MujocoEnv()
 	this->cb_ready_plugins_.clear();
 	this->plugins_.clear();
 	mj_deleteVFS(&vfs_);
+
+	if (threadpool_ != nullptr) {
+		mju_threadPoolDestroy(threadpool_);
+	}
 
 	plugin_utils::unloadPluginloader();
 }
