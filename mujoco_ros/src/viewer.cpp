@@ -2092,6 +2092,9 @@ void Viewer::Sync()
 		warn_vgeomfull_prev_ = scnstate_.data.warning[mjWARN_VGEOMFULL].number;
 	}
 
+	// Run render cbs from plugins
+	this->env_->runRenderCbs(&this->scn);
+
 	// update settings
 	UpdateSettings(this, m_.get());
 
@@ -2704,7 +2707,6 @@ void Viewer::RenderLoop()
 			} else {
 				scnstate_.data.warning[mjWARN_VGEOMFULL].number +=
 				    mjv_updateSceneFromState(&scnstate_, &this->opt, &this->pert, &this->cam, mjCAT_ALL, &this->scn);
-				// TODO(dleins): run mjros render callbacks?
 			}
 		} // MutexLock (unblocks simulation thread)
 

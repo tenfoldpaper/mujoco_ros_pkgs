@@ -1,3 +1,11 @@
+<a name="unreleased"></a>
+## Unreleased
+
+### Fixed
+* Added missing call to render callbacks in viewer. While the callbacks were still being run for offscreen rendering, the viewer did not render additional geoms added by plugins.
+
+Contributors: @DavidPL1
+
 <a name="0.9.0"></a>
 ## [0.9.0] - 2024-07-31
 
@@ -262,6 +270,7 @@ Contributors: @DavidPL1, @balandbal
 
 Contributors: @DavidPL1
 
+[unreleased]: https://github.com/ubi-agni/mujoco_ros_pkgs/compare/0.9.0...HEAD
 [0.9.0]: https://github.com/ubi-agni/mujoco_ros_pkgs/compare/0.8.0...0.9.0
 [0.8.0]: https://github.com/ubi-agni/mujoco_ros_pkgs/compare/0.7.0...0.8.0
 [0.7.0]: https://github.com/ubi-agni/mujoco_ros_pkgs/compare/0.6.0...0.7.0
