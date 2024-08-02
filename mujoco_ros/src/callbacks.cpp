@@ -83,6 +83,7 @@ void MujocoEnv::setupServices()
 	service_servers_.emplace_back(nh_->advertiseService("get_loading_request_state", &MujocoEnv::getStateUintCB, this));
 	service_servers_.emplace_back(nh_->advertiseService("get_sim_info", &MujocoEnv::getSimInfoCB, this));
 	service_servers_.emplace_back(nh_->advertiseService("set_rt_factor", &MujocoEnv::setRTFactorCB, this));
+	service_servers_.emplace_back(nh_->advertiseService("get_plugin_stats", &MujocoEnv::getPluginStatsCB, this));
 
 	action_step_ = std::make_unique<actionlib::SimpleActionServer<mujoco_ros_msgs::StepAction>>(
 	    *nh_, "step", boost::bind(&MujocoEnv::onStepGoal, this, boost::placeholders::_1), false);
@@ -129,28 +130,28 @@ void MujocoEnv::onStepGoal(const mujoco_ros_msgs::StepGoalConstPtr &goal)
 void MujocoEnv::runControlCbs()
 {
 	for (const auto &plugin : this->cb_ready_plugins_) {
-		plugin->controlCallback(this->model_.get(), this->data_.get());
+		plugin->wrappedControlCallback(this->model_.get(), this->data_.get());
 	}
 }
 
 void MujocoEnv::runPassiveCbs()
 {
 	for (const auto &plugin : this->cb_ready_plugins_) {
-		plugin->passiveCallback(this->model_.get(), this->data_.get());
+		plugin->wrappedPassiveCallback(this->model_.get(), this->data_.get());
 	}
 }
 
 void MujocoEnv::runRenderCbs(mjvScene *scene)
 {
 	for (const auto &plugin : this->cb_ready_plugins_) {
-		plugin->renderCallback(this->model_.get(), this->data_.get(), scene);
+		plugin->wrappedRenderCallback(this->model_.get(), this->data_.get(), scene);
 	}
 }
 
 void MujocoEnv::runLastStageCbs()
 {
 	for (const auto &plugin : this->cb_ready_plugins_) {
-		plugin->lastStageCallback(this->model_.get(), this->data_.get());
+		plugin->wrappedLastStageCallback(this->model_.get(), this->data_.get());
 	}
 }
 
@@ -931,6 +932,25 @@ bool MujocoEnv::setRTFactorCB(mujoco_ros_msgs::SetFloat::Request &req, mujoco_ro
 	auto it                   = std::find(std::next(std::begin(percentRealTime)), std::end(percentRealTime), closest);
 	settings_.real_time_index = std::distance(std::begin(percentRealTime), it);
 	settings_.speed_changed   = true;
+	return true;
+}
+
+bool MujocoEnv::getPluginStatsCB(mujoco_ros_msgs::GetPluginStats::Request & /*req*/,
+                                 mujoco_ros_msgs::GetPluginStats::Response &resp)
+{
+	// Lock mutex to get data within one step
+	std::lock_guard<std::recursive_mutex> lk_sim(physics_thread_mutex_);
+	for (const auto &plugin : plugins_) {
+		mujoco_ros_msgs::PluginStats stats;
+		stats.plugin_type             = plugin->type_;
+		stats.load_time               = plugin->load_time_;
+		stats.reset_time              = plugin->reset_time_;
+		stats.ema_steptime_control    = plugin->ema_steptime_control_;
+		stats.ema_steptime_passive    = plugin->ema_steptime_passive_;
+		stats.ema_steptime_render     = plugin->ema_steptime_render_;
+		stats.ema_steptime_last_stage = plugin->ema_steptime_last_stage_;
+		resp.stats.emplace_back(stats);
+	}
 	return true;
 }
 

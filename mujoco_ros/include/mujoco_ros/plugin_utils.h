@@ -56,7 +56,20 @@ public:
 		type_            = static_cast<std::string>(rosparam_config_["type"]);
 	};
 
+	// Plugin type as string
 	std::string type_;
+	// load time
+	double load_time_ = -1.0;
+	// reset time
+	double reset_time_ = -1.0;
+	// exponential moving average control step time in seconds
+	double ema_steptime_control_ = 0.0;
+	// exponential moving average passive step time in seconds
+	double ema_steptime_passive_ = 0.0;
+	// exponential moving average render step time in seconds
+	double ema_steptime_render_ = 0.0;
+	// exponential moving average last stage step time in seconds
+	double ema_steptime_last_stage_ = 0.0;
 
 	/**
 	 * @brief Wrapper method that evaluates if loading the plugin is successful
@@ -68,7 +81,9 @@ public:
 	 */
 	bool safe_load(const mjModel *m, mjData *d)
 	{
+		const auto start    = Clock::now();
 		loading_successful_ = load(m, d);
+		load_time_          = Seconds(Clock::now() - start).count();
 		if (!loading_successful_)
 			ROS_WARN_STREAM_NAMED("mujoco_ros_plugin",
 			                      "Plugin of type '"
@@ -82,8 +97,88 @@ public:
 	 */
 	void safe_reset()
 	{
-		if (loading_successful_)
+		if (loading_successful_) {
+			const auto start = Clock::now();
 			reset();
+			reset_time_ = Seconds(Clock::now() - start).count();
+		}
+	}
+
+	/**
+	 * @brief Wrapper method that calls controlCallback and counts the time for the exponential moving average.
+	 *
+	 * @param[in] model pointer to const mjModel.
+	 * @param[in] data pointer to mjData.
+	 */
+	void wrappedControlCallback(const mjModel *model, mjData *data)
+	{
+		const auto start = Clock::now();
+		skip_ema_        = false;
+		controlCallback(model, data);
+		if (skip_ema_) {
+			return;
+		}
+		const auto elapsed_secs = Seconds(Clock::now() - start).count();
+		// update ema with sensitivity for ~1000 steps
+		ema_steptime_control_ = 0.002 * elapsed_secs + 0.998 * ema_steptime_control_;
+	}
+
+	/**
+	 * @brief Wrapper method that calls passiveCallback and counts the time for the exponential moving average.
+	 *
+	 * @param[in] model pointer to const mjModel.
+	 * @param[in] data pointer to mjData.
+	 */
+	void wrappedPassiveCallback(const mjModel *model, mjData *data)
+	{
+		const auto start = Clock::now();
+		skip_ema_        = false;
+		passiveCallback(model, data);
+		if (skip_ema_) {
+			return;
+		}
+		const auto elapsed_secs = Seconds(Clock::now() - start).count();
+		// update ema with sensitivity for ~1000 steps
+		ema_steptime_passive_ = 0.002 * elapsed_secs + 0.998 * ema_steptime_passive_;
+	}
+
+	/**
+	 * @brief Wrapper method that calls renderCallback and counts the time for the exponential moving average.
+	 *
+	 * @param[in] model pointer to const mjModel.
+	 * @param[in] data pointer to mjData.
+	 * @param[in] scene pointer to mjvScene.
+	 */
+	void wrappedRenderCallback(const mjModel *model, mjData *data, mjvScene *scene)
+	{
+		const auto start = Clock::now();
+		skip_ema_        = false;
+		renderCallback(model, data, scene);
+		if (skip_ema_) {
+			return;
+		}
+		const auto elapsed_secs = Seconds(Clock::now() - start).count();
+		// update ema with sensitivity for ~1000 steps
+		ema_steptime_render_ = 0.002 * elapsed_secs + 0.998 * ema_steptime_render_;
+	}
+
+	/**
+	 * @brief Wrapper method that calls lastStageCallback and counts the time for the exponential moving average.
+	 *
+	 * @param[in] model pointer to const mjModel.
+	 * @param[in] data pointer to mjData.
+	 */
+	void wrappedLastStageCallback(const mjModel *model, mjData *data)
+	{
+		const auto start = Clock::now();
+		skip_ema_        = false;
+		lastStageCallback(model, data);
+		if (skip_ema_) {
+			return;
+		}
+		const auto elapsed_secs = Seconds(Clock::now() - start).count();
+		// update ema with sensitivity for ~1000 steps
+		ema_steptime_last_stage_ = 0.002 * elapsed_secs + 0.998 * ema_steptime_last_stage_;
 	}
 
 	/**
@@ -94,7 +189,7 @@ public:
 	 * @param[in] model pointer to const mjModel.
 	 * @param[in] data pointer to mjData.
 	 */
-	virtual void controlCallback(const mjModel * /*model*/, mjData * /*data*/){};
+	virtual void controlCallback(const mjModel * /*model*/, mjData * /*data*/) { skip_ema_ = true; };
 
 	/**
 	 * @brief Override this function to compute and apply custom passive (i.e. non-controlled) forces.
@@ -104,7 +199,7 @@ public:
 	 * @param[in] model pointer to const mjModel.
 	 * @param[in] data pointer to mjData.
 	 */
-	virtual void passiveCallback(const mjModel * /*model*/, mjData * /*data*/){};
+	virtual void passiveCallback(const mjModel * /*model*/, mjData * /*data*/) { skip_ema_ = true; };
 
 	/**
 	 * @brief Override this callback to add custom visualisations to the scene.
@@ -113,7 +208,10 @@ public:
 	 * @param[in] data pointer to mjData.
 	 * @param[in] scene pointer to mjvScene.
 	 */
-	virtual void renderCallback(const mjModel * /*model*/, mjData * /*data*/, mjvScene * /*scene*/){};
+	virtual void renderCallback(const mjModel * /*model*/, mjData * /*data*/, mjvScene * /*scene*/)
+	{
+		skip_ema_ = true;
+	};
 
 	/**
 	 * @brief Override this callback to add custom behavior at the end of a mujoco_ros simulation step.
@@ -123,7 +221,7 @@ public:
 	 * @param[in] model pointer to const mjModel.
 	 * @param[in] data pointer to mjData.
 	 */
-	virtual void lastStageCallback(const mjModel * /*model*/, mjData * /*data*/){};
+	virtual void lastStageCallback(const mjModel * /*model*/, mjData * /*data*/) { skip_ema_ = true; };
 
 	/**
 	 * @brief Override this callback to add custom behavior when a geom has been changed in the model.
@@ -158,6 +256,9 @@ protected:
 	XmlRpc::XmlRpcValue rosparam_config_;
 	ros::NodeHandle node_handle_;
 	MujocoEnvPtr env_ptr_;
+
+	// flag to skip ema calculation (e.g. plugins calculation frequencies lower than sim step size)
+	bool skip_ema_ = false;
 };
 
 namespace plugin_utils {

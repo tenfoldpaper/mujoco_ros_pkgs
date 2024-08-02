@@ -22,6 +22,7 @@ add_message_files(
     EqualityConstraintParameters.msg
     EqualityConstraintType.msg
     SimInfo.msg
+    PluginStats.msg
 )
 
 add_service_files(
@@ -42,6 +43,7 @@ add_service_files(
     Reload.srv
     SetMocapState.srv
     GetSimInfo.srv
+    GetPluginStats.srv
 )
 
 add_action_files(

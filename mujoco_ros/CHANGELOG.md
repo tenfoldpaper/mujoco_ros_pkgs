@@ -2,7 +2,11 @@
 ## Unreleased
 
 ### Added
-* Now it's possible to use MuJoCos intenal threadpool to speed up simulation. The number ob threads can be set with either `mujoco_threads` in the server launchfile or directly with `num_mj_threads` for the server node. If a number above 1 is used, multithreading is enabled. MuJoCo will then use the threadpool for parallel computations in the engine itself, but also plugins may use the threadpool to dispatch tasks (via (mjTask)[https://mujoco.readthedocs.io/en/3.2.0/APIreference/APItypes.html#mjtask] and (mju_threadPoolEnqueue)[https://mujoco.readthedocs.io/en/3.2.0/APIreference/APIfunctions.html#mju-threadpoolenqueue]). The default is `min(#available_threads - 1, 4)`.
+* Now it's possible to use MuJoCos intenal threadpool to speed up simulation. The number ob threads can be set with either `mujoco_threads` in the server launchfile or directly with `num_mj_threads` for the server node.
+If a number above 1 is used, multithreading is enabled. MuJoCo will then use the threadpool for parallel computations in the engine itself, but also plugins may use the threadpool to dispatch tasks (via (mjTask)[https://mujoco.readthedocs.io/en/3.2.0/APIreference/APItypes.html#mjtask] and (mju_threadPoolEnqueue)[https://mujoco.readthedocs.io/en/3.2.0/APIreference/APIfunctions.html#mju-threadpoolenqueue]).
+The default is `min(#available_threads - 1, 4)`.
+* Added profiling of plugin load and callback execution times. For each callback an EMA with sensitivity of 1000 steps is computed. In case a plugin has lower frequency than simulation step size, the callback should set `skip_ema_ = true` when skipping computations.
+Loading and reset times are reported in the server debug log. All plugin stats can be retrieved by the `get_plugin_stats` service call.
 
 ### Fixed
 * Added missing call to render callbacks in viewer. While the callbacks were still being run for offscreen rendering, the viewer did not render additional geoms added by plugins.

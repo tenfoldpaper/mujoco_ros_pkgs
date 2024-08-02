@@ -269,6 +269,7 @@ void MujocoEnv::resetSim()
 
 	for (auto &plugin : plugins_) {
 		plugin->safe_reset();
+		ROS_DEBUG_STREAM("Resetting plugin " << plugin->type_ << " took " << plugin->reset_time_ << " seconds");
 	}
 
 	for (const auto viewer : connected_viewers_) {
@@ -443,6 +444,7 @@ void MujocoEnv::loadPlugins()
 		if (plugin->safe_load(model_.get(), data_.get())) {
 			cb_ready_plugins_.emplace_back(plugin.get());
 		}
+		ROS_DEBUG_STREAM("Loading plugin " << plugin->type_ << " took " << plugin->load_time_ << " seconds");
 	}
 	ROS_DEBUG("Done loading MujocoRosPlugins");
 }
