@@ -1,0 +1,23 @@
+<?xml version="1.0"?>
+<package format="2">
+  <name>mujoco_ros_laser</name>
+  <version>0.9.0</version>
+  <description>MuJoCo ROS Laser Plugin</description>
+
+
+  <maintainer email="dleins@techfak.uni-bielefeld.de">David Leins</maintainer>
+  <author>David P. Leins</author>
+
+  <license>BSD</license>
+
+  <buildtool_depend>catkin</buildtool_depend>
+  <depend>roscpp</depend>
+  <depend>pluginlib</depend>
+  <depend>mujoco_ros</depend>
+  <depend>mujoco_ros_sensors</depend>
+  <depend>sensor_msgs</depend>
+
+  <export>
+    <mujoco_ros plugin="${prefix}/mujoco_laser_plugin.xml" />
+  </export>
+</package>
