@@ -45,6 +45,12 @@
 
 namespace mujoco_ros {
 
+using Clock = std::chrono::steady_clock;
+static_assert(std::ratio_less_equal_v<Clock::period, std::milli>, "Clock must have millisecond precision or better");
+
+using Seconds      = std::chrono::duration<double>;
+using Milliseconds = std::chrono::duration<double, std::milli>;
+
 namespace rendering {
 
 using streamType = enum streamType_ : uint8_t {

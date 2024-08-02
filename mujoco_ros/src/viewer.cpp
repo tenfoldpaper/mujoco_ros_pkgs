@@ -1108,8 +1108,8 @@ void CopyPose(mujoco_ros::Viewer *viewer, const mjModel *m, const mjData *d)
 // millisecond timer, for MuJoCo built-in profiler
 mjtNum Timer()
 {
-	static auto start = mujoco_ros::Viewer::Clock::now();
-	auto elapsed      = Milliseconds(mujoco_ros::Viewer::Clock::now() - start);
+	static auto start = Clock::now();
+	auto elapsed      = Milliseconds(Clock::now() - start);
 	return elapsed.count();
 }
 
@@ -2663,7 +2663,7 @@ void Viewer::RenderLoop()
 	this->platform_ui->SetVSync(this->vsync);
 
 	frames_          = 0;
-	last_fps_update_ = mujoco_ros::Viewer::Clock::now();
+	last_fps_update_ = Clock::now();
 
 	// Run event loop
 	while (!this->platform_ui->ShouldCloseWindow() && !this->exit_request.load()) {
@@ -2714,7 +2714,7 @@ void Viewer::RenderLoop()
 		this->Render();
 
 		// Update FPS stat, at most 5 times per second
-		auto now        = mujoco_ros::Viewer::Clock::now();
+		auto now        = Clock::now();
 		double interval = Seconds(now - last_fps_update_).count();
 		++frames_;
 		if (interval > 0.2) {

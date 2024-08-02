@@ -7,6 +7,9 @@
 ### Fixed
 * Added missing call to render callbacks in viewer. While the callbacks were still being run for offscreen rendering, the viewer did not render additional geoms added by plugins.
 
+### Changed
+* Moved `mujoco_ros::Viewer::Clock` definition to `mujoco_ros::Clock` (into common_types.h).
+
 Contributors: @DavidPL1
 
 <a name="0.9.0"></a>

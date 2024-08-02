@@ -86,9 +86,6 @@ using MutexLock = std::unique_lock<std::recursive_mutex>;
 class Viewer
 {
 public:
-	using Clock = std::chrono::steady_clock;
-	static_assert(std::ratio_less_equal_v<Clock::period, std::milli>, "Clock must have millisecond precision or better");
-
 	static int constexpr kMaxGeom = 20000;
 
 	// Create object and initialize the ui

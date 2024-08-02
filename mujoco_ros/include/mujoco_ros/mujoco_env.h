@@ -378,8 +378,6 @@ protected:
 	 */
 	void physicsLoop();
 
-	using Clock = std::chrono::steady_clock;
-
 	/**
 	 * @brief physics step when sim is running.
 	 */

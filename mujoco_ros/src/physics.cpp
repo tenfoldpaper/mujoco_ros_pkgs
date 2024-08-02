@@ -43,15 +43,12 @@
 namespace mujoco_ros {
 namespace mju = ::mujoco::sample_util;
 
-using Seconds      = std::chrono::duration<double>;
-using Milliseconds = std::chrono::duration<double, std::milli>;
-
 void MujocoEnv::physicsLoop()
 {
 	ROS_DEBUG("Physics loop started");
 	is_physics_running_ = 1;
 	// CPU-sim syncronization point
-	std::chrono::time_point<mujoco_ros::Viewer::Clock> syncCPU;
+	std::chrono::time_point<Clock> syncCPU;
 	mjtNum syncSim = 0;
 
 	// run until asked to exit
@@ -98,11 +95,11 @@ void MujocoEnv::simPausedPhysics(mjtNum &syncSim)
 {
 	if (settings_.env_steps_request.load() > 0) { // Action call or arrow keys used for stepping
 		syncSim             = data_->time;
-		const auto startCPU = mujoco_ros::Viewer::Clock::now();
+		const auto startCPU = Clock::now();
 
 		while (settings_.env_steps_request.load() > 0 &&
 		       (connected_viewers_.empty() ||
-		        mujoco_ros::Viewer::Clock::now() - startCPU < Seconds(mujoco_ros::Viewer::render_ui_rate_lower_bound_))) {
+		        Clock::now() - startCPU < Seconds(mujoco_ros::Viewer::render_ui_rate_lower_bound_))) {
 			// Run single step
 			mj_step(model_.get(), data_.get());
 			publishSimTime(data_->time);
@@ -137,10 +134,10 @@ void MujocoEnv::simPausedPhysics(mjtNum &syncSim)
 	}
 }
 
-void MujocoEnv::simUnpausedPhysics(mjtNum &syncSim, std::chrono::time_point<mujoco_ros::Viewer::Clock> &syncCPU)
+void MujocoEnv::simUnpausedPhysics(mjtNum &syncSim, std::chrono::time_point<Clock> &syncCPU)
 {
 	// record CPU time at start of iteration
-	const auto startCPU = mujoco_ros::Viewer::Clock::now();
+	const auto startCPU = Clock::now();
 
 	// Elapsed CPU and simulation time since last sync
 	const auto elapsedCPU = startCPU - syncCPU;
@@ -193,9 +190,8 @@ void MujocoEnv::simUnpausedPhysics(mjtNum &syncSim, std::chrono::time_point<mujo
 
 		// If real-time is bound, run until sim steps are in sync with CPU steps, otherwise run as fast as
 		// possible
-		while ((settings_.real_time_index == 0 ||
-		        Seconds((data_->time - syncSim) * slowdown) < mujoco_ros::Viewer::Clock::now() - syncCPU) &&
-		       (mujoco_ros::Viewer::Clock::now() - startCPU < Seconds(mujoco_ros::Viewer::render_ui_rate_lower_bound_) ||
+		while ((settings_.real_time_index == 0 || Seconds((data_->time - syncSim) * slowdown) < Clock::now() - syncCPU) &&
+		       (Clock::now() - startCPU < Seconds(mujoco_ros::Viewer::render_ui_rate_lower_bound_) ||
 		        connected_viewers_.empty()) && // only break if rendering UI is actually necessary
 		       !settings_.exit_request.load() &&
 		       num_steps_until_exit_ != 0) {
@@ -206,9 +202,8 @@ void MujocoEnv::simUnpausedPhysics(mjtNum &syncSim, std::chrono::time_point<mujo
 					measured                     = true;
 				} else if (syncCPU.time_since_epoch().count() % 3 == 0) { // measure slowdown every 3rd step for
 					                                                       // an updated estimate
-					sim_state_.measured_slowdown =
-					    std::chrono::duration<double>(mujoco_ros::Viewer::Clock::now() - syncCPU).count() /
-					    Seconds(data_->time - syncSim).count();
+					sim_state_.measured_slowdown = std::chrono::duration<double>(Clock::now() - syncCPU).count() /
+					                               Seconds(data_->time - syncSim).count();
 				}
 			}
 

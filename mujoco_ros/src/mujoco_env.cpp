@@ -210,12 +210,12 @@ void MujocoEnv::eventLoop()
 {
 	ROS_DEBUG("Starting event loop");
 	is_event_running_ = 1;
-	auto now          = mujoco_ros::Viewer::Clock::now();
+	auto now          = Clock::now();
 	auto fps_cap      = Seconds(mujoco_ros::Viewer::render_ui_rate_upper_bound_); // Cap at 60 fps
 	while (ros::ok() && !settings_.exit_request.load() && (!settings_.headless)) {
 		{
 			std::unique_lock<std::recursive_mutex> lock(physics_thread_mutex_);
-			now = mujoco_ros::Viewer::Clock::now();
+			now = Clock::now();
 
 			if (settings_.load_request.load() == 1) {
 				ROS_DEBUG("Load request received");
@@ -631,7 +631,7 @@ bool MujocoEnv::initModelFromQueue()
 		ROS_DEBUG("\tSaved string content to VFS");
 	}
 
-	auto load_start = Viewer::Clock::now();
+	auto load_start = Clock::now();
 	if (is_mjb) {
 		ROS_DEBUG("\tLoading mjb file");
 		mnew = mj_loadModel(queued_filename_, nullptr);
@@ -645,7 +645,7 @@ bool MujocoEnv::initModelFromQueue()
 		}
 	}
 
-	auto load_interval  = Viewer::Clock::now() - load_start;
+	auto load_interval  = Clock::now() - load_start;
 	double load_seconds = Seconds(load_interval).count();
 
 	if (!load_error_[0]) {
