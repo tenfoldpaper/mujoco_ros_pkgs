@@ -40,10 +40,13 @@
     </worldbody>
 
     <sensor>
-        <framepos  name="immovable_pos"  objtype="xbody" objname="immovable" />
-        <framequat name="immovable_quat" objtype="xbody" objname="immovable" />
+        <framepos   name="immovable_pos"  objtype="xbody" objname="immovable" />
+        <framequat  name="immovable_quat" objtype="xbody" objname="immovable" />
+        <framexaxis name="framex_EE"      objtype="site"  objname="joint2_site" />
 
         <velocimeter name="vel_EE" site="joint2_site" />
         <jointvel    name="vel_joint2"  joint="joint2" />
+
+        <subtreecom  name="subtree_end_link" body="end_link" />
     </sensor>
 </mujoco>

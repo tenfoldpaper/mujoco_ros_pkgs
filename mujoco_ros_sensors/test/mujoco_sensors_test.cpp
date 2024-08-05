@@ -303,9 +303,11 @@ TEST_F(TrainEnvFixture, Sensor3DOF)
 	mujoco_ros_msgs::SensorNoiseModel noise_model;
 	noise_model.mean.emplace_back(0.0);
 	noise_model.mean.emplace_back(1.0);
+	noise_model.mean.emplace_back(0.0);
 	noise_model.std.emplace_back(0.025);
 	noise_model.std.emplace_back(0.0);
-	noise_model.set_flag    = 3;
+	noise_model.std.emplace_back(0.0);
+	noise_model.set_flag    = 7;
 	noise_model.sensor_name = "vel_EE";
 
 	mujoco_ros_msgs::RegisterSensorNoiseModels srv;
@@ -416,9 +418,11 @@ TEST_F(TrainEnvFixture, Framepos)
 	mujoco_ros_msgs::SensorNoiseModel noise_model;
 	noise_model.mean.emplace_back(0.0);
 	noise_model.mean.emplace_back(1.0);
+	noise_model.mean.emplace_back(0.0);
 	noise_model.std.emplace_back(0.025);
 	noise_model.std.emplace_back(0.0);
-	noise_model.set_flag    = 3;
+	noise_model.std.emplace_back(0.0);
+	noise_model.set_flag    = 7;
 	noise_model.sensor_name = "immovable_pos";
 
 	mujoco_ros_msgs::RegisterSensorNoiseModels srv;
@@ -608,9 +612,13 @@ TEST_F(TrainEnvFixture, quaternion)
 	    { msgPtr->quaternion.w, msgPtr->quaternion.x, msgPtr->quaternion.y, msgPtr->quaternion.z }, 0.0001, true);
 
 	mujoco_ros_msgs::SensorNoiseModel noise_model;
+	noise_model.mean.emplace_back(0.0);
+	noise_model.mean.emplace_back(0.0);
 	noise_model.mean.emplace_back(1.0);
+	noise_model.std.emplace_back(0.0);
+	noise_model.std.emplace_back(0.0);
 	noise_model.std.emplace_back(0.025);
-	noise_model.set_flag    = 4;
+	noise_model.set_flag    = 7;
 	noise_model.sensor_name = "immovable_quat";
 
 	mujoco_ros_msgs::RegisterSensorNoiseModels srv;
@@ -709,4 +717,67 @@ TEST_F(TrainEnvFixture, quaternion)
 	EXPECT_EQ(variances[3], 0);
 	EXPECT_EQ(variances[4], 0);
 	EXPECT_EQ(variances[5], 0);
+}
+
+TEST_F(EvalEnvFixture, NoAdmEvalNoiseModelChange)
+{
+	mujoco_ros_msgs::SensorNoiseModel noise_model;
+	noise_model.mean.emplace_back(0.0);
+	noise_model.mean.emplace_back(1.0);
+	noise_model.std.emplace_back(0.025);
+	noise_model.std.emplace_back(0.0);
+	noise_model.set_flag    = 3;
+	noise_model.sensor_name = "vel_EE";
+
+	mujoco_ros_msgs::RegisterSensorNoiseModels srv;
+	srv.request.noise_models.emplace_back(noise_model);
+	srv.request.admin_hash = "some_wrong_hash";
+
+	ros::ServiceClient client =
+	    nh->serviceClient<mujoco_ros_msgs::RegisterSensorNoiseModels>("/sensors/register_noise_models");
+	EXPECT_TRUE(client.call(srv)) << "Service call failed!";
+
+	EXPECT_EQ(srv.response.success, false) << "Service call should have failed!";
+}
+
+TEST_F(EvalEnvFixture, AllowedEvalNoiseModelChange)
+{
+	mujoco_ros_msgs::SensorNoiseModel noise_model;
+	noise_model.mean.emplace_back(0.0);
+	noise_model.mean.emplace_back(1.0);
+	noise_model.std.emplace_back(0.025);
+	noise_model.std.emplace_back(0.0);
+	noise_model.set_flag    = 3;
+	noise_model.sensor_name = "vel_EE";
+
+	mujoco_ros_msgs::RegisterSensorNoiseModels srv;
+	srv.request.noise_models.emplace_back(noise_model);
+	srv.request.admin_hash = "some_hash";
+
+	ros::ServiceClient client =
+	    nh->serviceClient<mujoco_ros_msgs::RegisterSensorNoiseModels>("/sensors/register_noise_models");
+	EXPECT_TRUE(client.call(srv)) << "Service call failed!";
+
+	EXPECT_EQ(srv.response.success, true) << "Service call should have succeeded!";
+}
+
+TEST_F(TrainEnvFixture, UnknownSensorAddNoise)
+{
+	mujoco_ros_msgs::SensorNoiseModel noise_model;
+	noise_model.mean.emplace_back(0.0);
+	noise_model.mean.emplace_back(1.0);
+	noise_model.std.emplace_back(0.025);
+	noise_model.std.emplace_back(0.0);
+	noise_model.set_flag    = 3;
+	noise_model.sensor_name = "unknown_sensor";
+
+	mujoco_ros_msgs::RegisterSensorNoiseModels srv;
+	srv.request.noise_models.emplace_back(noise_model);
+	srv.request.admin_hash = "example_hash";
+
+	ros::ServiceClient client =
+	    nh->serviceClient<mujoco_ros_msgs::RegisterSensorNoiseModels>("/sensors/register_noise_models");
+	EXPECT_TRUE(client.call(srv)) << "Service call failed!";
+
+	EXPECT_EQ(srv.response.success, true) << "Service call should have succeeded!";
 }
