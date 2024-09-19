@@ -197,7 +197,7 @@ void processRay(const mjModel *model, mjData *data, std::mt19937 rand_generator,
 {
 	mjtNum pos[3], target[3];
 	mju_copy(pos, laser_config.rays + 3 * ray_idx, 3);
-	mju_mulMatTVec3(target, rot, pos);
+	mju_mulMatVec3(target, rot, pos);
 
 	// start position
 	mju_copy(pos, data->site_xpos + 3 * laser_config.site_attached, 3);
