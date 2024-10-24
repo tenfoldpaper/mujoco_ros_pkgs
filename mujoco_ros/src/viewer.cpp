@@ -2390,8 +2390,7 @@ void Viewer::Render()
 
 		// Show last loading error
 		if (this->load_error[0]) {
-			mjr_overlay(mjFONT_NORMAL, mjGRID_BOTTOMLEFT, rect, this->load_error, nullptr,
-			            &this->platform_ui->mjr_context());
+			mjr_overlay(mjFONT_NORMAL, mjGRID_BOTTOM, rect, this->load_error, nullptr, &this->platform_ui->mjr_context());
 		}
 
 		// render UIs
@@ -2483,7 +2482,7 @@ void Viewer::Render()
 
 	// Show last loading error
 	if (this->load_error[0]) {
-		mjr_overlay(mjFONT_NORMAL, mjGRID_BOTTOMLEFT, rect, this->load_error, nullptr, &this->platform_ui->mjr_context());
+		mjr_overlay(mjFONT_NORMAL, mjGRID_BOTTOM, rect, this->load_error, nullptr, &this->platform_ui->mjr_context());
 	}
 
 	// show pause/loading label
