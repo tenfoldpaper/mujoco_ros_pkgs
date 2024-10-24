@@ -650,18 +650,11 @@ bool MujocoEnv::initModelFromQueue()
 	auto load_interval  = Clock::now() - load_start;
 	double load_seconds = Seconds(load_interval).count();
 
-	if (!load_error_[0]) {
-		ROS_INFO_STREAM("Model loaded in " << load_seconds << " seconds");
-		if (load_seconds > 0.25) {
-			mju::sprintf_arr(load_error_, "Model loaded in %.2g seconds", load_seconds);
-		}
-	}
-
-	for (const auto viewer : connected_viewers_) {
-		mju::strcpy_arr(viewer->load_error, load_error_);
-	}
-
 	if (!mnew) {
+		for (const auto viewer : connected_viewers_) {
+			mju::strcpy_arr(viewer->load_error, load_error_);
+		}
+
 		ROS_ERROR_STREAM("Loading new model failed: " << load_error_);
 		ROS_DEBUG("\tRolling back old model");
 
@@ -676,6 +669,7 @@ bool MujocoEnv::initModelFromQueue()
 		return false;
 	}
 
+	ROS_INFO_STREAM("Model loaded in " << load_seconds << " seconds");
 	ROS_DEBUG("Model compiled successfully");
 	dnew = mj_makeData(mnew);
 
@@ -697,6 +691,14 @@ bool MujocoEnv::initModelFromQueue()
 		ROS_WARN_STREAM("Model compiled, but got simulation warning: " << load_error_);
 		if (!settings_.headless)
 			settings_.run = 0;
+	} else {
+		if (load_seconds > 0.25) {
+			mju::sprintf_arr(load_error_, "Model loaded in %.2g seconds", load_seconds);
+		}
+	}
+
+	for (const auto viewer : connected_viewers_) {
+		mju::strcpy_arr(viewer->load_error, load_error_);
 	}
 
 	// Update real-time settings
