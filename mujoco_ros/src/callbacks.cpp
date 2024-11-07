@@ -413,10 +413,10 @@ bool MujocoEnv::getBodyStateCB(mujoco_ros_msgs::GetBodyState::Request &req,
 		resp.state.pose.pose.position.x    = data_->xpos[body_id * 3];
 		resp.state.pose.pose.position.y    = data_->xpos[body_id * 3 + 1];
 		resp.state.pose.pose.position.z    = data_->xpos[body_id * 3 + 2];
-		resp.state.pose.pose.orientation.w = data_->xquat[body_id * 3];
-		resp.state.pose.pose.orientation.x = data_->xquat[body_id * 3 + 1];
-		resp.state.pose.pose.orientation.y = data_->xquat[body_id * 3 + 2];
-		resp.state.pose.pose.orientation.z = data_->xquat[body_id * 3 + 3];
+		resp.state.pose.pose.orientation.w = data_->xquat[body_id * 4];
+		resp.state.pose.pose.orientation.x = data_->xquat[body_id * 4 + 1];
+		resp.state.pose.pose.orientation.y = data_->xquat[body_id * 4 + 2];
+		resp.state.pose.pose.orientation.z = data_->xquat[body_id * 4 + 3];
 
 		resp.state.twist.header          = std_msgs::Header();
 		resp.state.twist.header.frame_id = "world";

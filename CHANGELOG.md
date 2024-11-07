@@ -14,6 +14,7 @@ Loading and reset times are reported in the server debug log. All plugin stats c
 * *mujoco_ros_control*: fixed sometimes using wrong joint id in default hardware interface (would only be correct, if the joints appear first and in the same order in the compiled MuJoCo model).
 * *mujoco_ros_sensors*: now skipping user sensors, as they should be handled in separate, dedicated plugins.
 * When loading takes more than 0.25 seconds the simulation is no longer automatically paused.
+* Fixed fetching of body quaternion in `get_body_state` service.
 
 ### Changed
 * Moved `mujoco_ros::Viewer::Clock` definition to `mujoco_ros::Clock` (into common_types.h).

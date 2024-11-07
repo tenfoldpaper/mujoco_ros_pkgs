@@ -538,6 +538,54 @@ TEST_F(PendulumEnvFixture, SetBodyStateCallback)
 	compare_qvel(d, m->jnt_dofadr[id_free], "ball_freejoint", { 0.0, 0.0, 0.0, 0.0, 0.0, 0.0 });
 }
 
+TEST_F(PendulumEnvFixture, GetBodyStateInvalidName)
+{
+	EXPECT_FALSE(env_ptr->settings_.run) << "Simulation should be paused!";
+	EXPECT_NEAR(env_ptr->getDataPtr()->time, 0, 1e-6) << "Simulation time should be 0.0!";
+	EXPECT_TRUE(ros::service::exists(env_ptr->getHandleNamespace() + "/set_body_state", true))
+	    << "Set body state service should be available!";
+	EXPECT_TRUE(ros::service::exists(env_ptr->getHandleNamespace() + "/get_body_state", true))
+	    << "Get body state service should be available!";
+
+	mujoco_ros_msgs::GetBodyState g_srv;
+	// wrong body name
+	g_srv.request.name = "unknown";
+	EXPECT_TRUE(ros::service::call(env_ptr->getHandleNamespace() + "/get_body_state", g_srv))
+	    << "get body state service call failed!";
+	EXPECT_FALSE(g_srv.response.success);
+}
+
+TEST_F(PendulumEnvFixture, GetBodyStateStaticBody)
+{
+	EXPECT_FALSE(env_ptr->settings_.run) << "Simulation should be paused!";
+	EXPECT_NEAR(env_ptr->getDataPtr()->time, 0, 1e-6) << "Simulation time should be 0.0!";
+	EXPECT_TRUE(ros::service::exists(env_ptr->getHandleNamespace() + "/set_body_state", true))
+	    << "Set body state service should be available!";
+	EXPECT_TRUE(ros::service::exists(env_ptr->getHandleNamespace() + "/get_body_state", true))
+	    << "Get body state service should be available!";
+
+	mujoco_ros_msgs::GetBodyState g_srv;
+	g_srv.request.name = "immovable";
+	EXPECT_TRUE(ros::service::call(env_ptr->getHandleNamespace() + "/get_body_state", g_srv))
+	    << "get body state service call failed!";
+	EXPECT_TRUE(g_srv.response.success);
+	EXPECT_EQ(g_srv.response.state.name, "immovable");
+	EXPECT_DOUBLE_EQ(g_srv.response.state.mass, 0.10239999741315842);
+	EXPECT_DOUBLE_EQ(g_srv.response.state.pose.pose.position.x, 0.56428);
+	EXPECT_DOUBLE_EQ(g_srv.response.state.pose.pose.position.y, 0.221972);
+	EXPECT_DOUBLE_EQ(g_srv.response.state.pose.pose.position.z, 0.6);
+	EXPECT_DOUBLE_EQ(g_srv.response.state.pose.pose.orientation.w, 1.0);
+	EXPECT_DOUBLE_EQ(g_srv.response.state.pose.pose.orientation.x, 0.0);
+	EXPECT_DOUBLE_EQ(g_srv.response.state.pose.pose.orientation.y, 0.0);
+	EXPECT_DOUBLE_EQ(g_srv.response.state.pose.pose.orientation.z, 0.0);
+	EXPECT_DOUBLE_EQ(g_srv.response.state.twist.twist.linear.x, 0.0);
+	EXPECT_DOUBLE_EQ(g_srv.response.state.twist.twist.linear.y, 0.0);
+	EXPECT_DOUBLE_EQ(g_srv.response.state.twist.twist.linear.z, 0.0);
+	EXPECT_DOUBLE_EQ(g_srv.response.state.twist.twist.angular.x, 0.0);
+	EXPECT_DOUBLE_EQ(g_srv.response.state.twist.twist.angular.y, 0.0);
+	EXPECT_DOUBLE_EQ(g_srv.response.state.twist.twist.angular.z, 0.0);
+}
+
 TEST_F(PendulumEnvFixture, GetBodyStateCallback)
 {
 	EXPECT_FALSE(env_ptr->settings_.run) << "Simulation should be paused!";
@@ -572,8 +620,6 @@ TEST_F(PendulumEnvFixture, GetBodyStateCallback)
 	EXPECT_TRUE(srv.response.success);
 
 	mujoco_ros_msgs::GetBodyState g_srv;
-	// wrong body name
-	g_srv.request.name = "unknown";
 
 	// correct request
 	g_srv.request.name = "body_ball";
@@ -582,7 +628,8 @@ TEST_F(PendulumEnvFixture, GetBodyStateCallback)
 	EXPECT_TRUE(g_srv.response.success);
 	EXPECT_EQ(g_srv.response.state.mass, srv.request.state.mass);
 	EXPECT_EQ(g_srv.response.state.name, srv.request.state.name);
-	EXPECT_EQ(g_srv.response.state.pose.pose, srv.request.state.pose.pose);
+	EXPECT_EQ(g_srv.response.state.pose.pose.position, srv.request.state.pose.pose.position);
+	EXPECT_EQ(g_srv.response.state.pose.pose.orientation, srv.request.state.pose.pose.orientation);
 	EXPECT_EQ(g_srv.response.state.twist.twist, srv.request.state.twist.twist);
 
 	// TODO(dleins): tests for bodies with a non-freejoint, no joint, and multiple joints (cannot set position but read!)
