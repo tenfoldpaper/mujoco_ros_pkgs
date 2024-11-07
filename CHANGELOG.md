@@ -21,6 +21,7 @@ Loading and reset times are reported in the server debug log. All plugin stats c
 ### Changed
 * Moved `mujoco_ros::Viewer::Clock` definition to `mujoco_ros::Clock` (into common_types.h).
 * Increased test coverage of `mujoco_ros_sensors` plugin.
+* Split monolithic ros interface tests into more individual tests.
 
 Contributors: @DavidPL1
 

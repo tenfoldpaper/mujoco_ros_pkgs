@@ -222,6 +222,14 @@ bool MujocoEnv::setBodyStateCB(mujoco_ros_msgs::SetBodyState::Request &req,
 	std::string full_error_msg("");
 	resp.success = true;
 
+	if (req.state.name.empty()) {
+		std::string error_msg("Body name is empty, cannot set body state!");
+		ROS_WARN_STREAM(error_msg);
+		resp.status_message = error_msg;
+		resp.success        = false;
+		return true;
+	}
+
 	int body_id = mj_name2id(model_.get(), mjOBJ_BODY, req.state.name.c_str());
 	if (body_id == -1) {
 		ROS_WARN_STREAM("Could not find model (mujoco body) with name " << req.state.name << ". Trying to find geom...");
@@ -377,6 +385,14 @@ bool MujocoEnv::getBodyStateCB(mujoco_ros_msgs::GetBodyState::Request &req,
 		return true;
 	}
 
+	if (req.name.empty()) {
+		std::string error_msg("Body name is empty, cannot get body state!");
+		ROS_WARN_STREAM(error_msg);
+		resp.status_message = error_msg;
+		resp.success        = false;
+		return true;
+	}
+
 	resp.success = true;
 
 	int body_id = mj_name2id(model_.get(), mjOBJ_BODY, req.name.c_str());
@@ -499,6 +515,14 @@ bool MujocoEnv::setGeomPropertiesCB(mujoco_ros_msgs::SetGeomProperties::Request 
 		return true;
 	}
 
+	if (req.properties.name.empty()) {
+		std::string error_msg("Geom name is empty, cannot set geom properties!");
+		ROS_WARN_STREAM(error_msg);
+		resp.status_message = error_msg;
+		resp.success        = false;
+		return true;
+	}
+
 	int geom_id = mj_name2id(model_.get(), mjOBJ_GEOM, req.properties.name.c_str());
 	if (geom_id == -1) {
 		std::string error_msg("Could not find model (mujoco geom) with name " + req.properties.name);
@@ -578,6 +602,14 @@ bool MujocoEnv::getGeomPropertiesCB(mujoco_ros_msgs::GetGeomProperties::Request 
 		resp.status_message =
 		    static_cast<decltype(resp.status_message)>("Hash mismatch, no permission to get geom properties!");
 		resp.success = false;
+		return true;
+	}
+
+	if (req.geom_name.empty()) {
+		std::string error_msg("Geom name is empty, cannot get geom properties!");
+		ROS_WARN_STREAM(error_msg);
+		resp.status_message = error_msg;
+		resp.success        = false;
 		return true;
 	}
 

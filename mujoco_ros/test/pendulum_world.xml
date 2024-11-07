@@ -36,5 +36,10 @@
             <geom type="box" size=".0125 .016 .032" rgba=".5 .5 .5 1" />
             <inertial pos="0 0 0" mass="0.1024" diaginertia="4.369e-5 4.028e-5 1.407e-5"/>
         </body>
+        <body name="multijoint" pos="2 1 0.5">
+            <geom type="capsule" fromto="0 0 1  0 0 0.6" size="0.06"/>
+            <joint name="slider1" type="slide" pos="0 0 0" axis="0 0 1"/>
+            <joint name="slider2" type="slide" pos="0 0 0" axis="0 1 0"/>
+        </body>
     </worldbody>
 </mujoco>

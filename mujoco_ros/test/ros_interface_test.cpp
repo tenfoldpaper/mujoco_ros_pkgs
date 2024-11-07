@@ -143,6 +143,19 @@ TEST_F(PendulumEnvFixture, PauseCallback)
 	EXPECT_FALSE(env_ptr->settings_.run) << "Simulation should be paused!";
 }
 
+TEST_F(PendulumEnvFixture, ReloadStringTooLong)
+{
+	EXPECT_FALSE(env_ptr->settings_.run) << "Simulation should be paused!";
+	EXPECT_NEAR(env_ptr->getDataPtr()->time, 0, 1e-6) << "Simulation time should be 0.0!";
+	EXPECT_TRUE(ros::service::exists(env_ptr->getHandleNamespace() + "/reload", true))
+	    << "Reload service should be available!";
+
+	mujoco_ros_msgs::Reload srv;
+	srv.request.model = std::string(env_ptr->kMaxFilenameLength + 1, 'a');
+	EXPECT_TRUE(ros::service::call(env_ptr->getHandleNamespace() + "/reload", srv)) << "Reload service call failed!";
+	EXPECT_FALSE(srv.response.success) << "Reload service should fail!";
+}
+
 TEST_F(PendulumEnvFixture, ReloadSameModelCallback)
 {
 	EXPECT_FALSE(env_ptr->settings_.run) << "Simulation should be paused!";
@@ -153,6 +166,7 @@ TEST_F(PendulumEnvFixture, ReloadSameModelCallback)
 	mujoco_ros_msgs::Reload srv;
 
 	EXPECT_TRUE(ros::service::call(env_ptr->getHandleNamespace() + "/reload", srv)) << "Reload service call failed!";
+	EXPECT_TRUE(srv.response.success) << "Reload service should succeed!";
 	float seconds = 0;
 	while (seconds < 2 && env_ptr->getOperationalStatus() > 0) { // wait for reload to finish
 		std::this_thread::sleep_for(std::chrono::milliseconds(1));
@@ -206,7 +220,7 @@ TEST_F(PendulumEnvFixture, ResetCallback)
 	EXPECT_NEAR(env_ptr->getDataPtr()->time, 0.0, 1e-6) << "Simulation time should be reset to 0.0!";
 }
 
-TEST_F(PendulumEnvFixture, StepGoal)
+TEST_F(PendulumEnvFixture, StepGoalSingle)
 {
 	ros::master::V_TopicInfo master_topics;
 	ros::master::getTopics(master_topics);
@@ -237,27 +251,103 @@ TEST_F(PendulumEnvFixture, StepGoal)
 	ac.sendGoal(goal);
 
 	EXPECT_TRUE(ac.waitForResult(ros::Duration(1.0))) << "Step action did not finish in time!";
-	EXPECT_TRUE(ac.getState() == actionlib::SimpleClientGoalState::SUCCEEDED) << "Step action did not succeed!";
-	EXPECT_EQ(ac.getResult()->success, true) << "Step action did not succeed!";
+	EXPECT_EQ(ac.getState(), actionlib::SimpleClientGoalState::SUCCEEDED) << "Step action did not succeed!";
+	EXPECT_TRUE(ac.getResult()->success) << "Step action did not succeed!";
 	EXPECT_NEAR(env_ptr->getDataPtr()->time, time + env_ptr->getModelPtr()->opt.timestep, 1e-6)
 	    << "Simulation time should have changed by timestep!";
+}
 
+TEST_F(PendulumEnvFixture, StepGoalMultiple)
+{
+	ros::master::V_TopicInfo master_topics;
+	ros::master::getTopics(master_topics);
+
+	bool found = false;
+	for (const auto &t : master_topics) {
+		if (t.name == env_ptr->getHandleNamespace() + "/step/result") {
+			found = true;
+			break;
+		}
+	}
+	// Workaround to connect to action server, this is only needed in cpp
+	env_ptr->settings_.run = 1;
+	EXPECT_TRUE(found) << "Step action should be available!";
+	ros::spinOnce();
+	actionlib::SimpleActionClient<mujoco_ros_msgs::StepAction> ac(env_ptr->getHandleNamespace() + "/step", true);
+	env_ptr->settings_.run = 0;
+
+	// Wait for paused state to be applied
+	std::this_thread::sleep_for(std::chrono::milliseconds(5));
+
+	mjtNum time = env_ptr->getDataPtr()->time;
+
+	mujoco_ros_msgs::StepGoal goal;
 	goal.num_steps = 100;
 	ac.sendGoal(goal);
 
 	EXPECT_TRUE(ac.waitForResult(ros::Duration(1.0))) << "Step action did not finish in time!";
-	EXPECT_TRUE(ac.getState() == actionlib::SimpleClientGoalState::SUCCEEDED) << "Step action did not succeed!";
-	EXPECT_EQ(ac.getResult()->success, true) << "Step action did not succeed!";
-	EXPECT_NEAR(env_ptr->getDataPtr()->time, time + env_ptr->getModelPtr()->opt.timestep * 101, 1e-6)
-	    << "Simulation time should have changed by timestep * 101!";
+	EXPECT_EQ(ac.getState(), actionlib::SimpleClientGoalState::SUCCEEDED) << "Step action did not succeed!";
+	EXPECT_TRUE(ac.getResult()->success) << "Step action did not succeed!";
+	EXPECT_NEAR(env_ptr->getDataPtr()->time, time + env_ptr->getModelPtr()->opt.timestep * 100, 1e-6)
+	    << "Simulation time should have changed by timestep * 100!";
+}
 
+TEST_F(PendulumEnvFixture, StepGoalPreemptUnpaused)
+{
+	ros::master::V_TopicInfo master_topics;
+	ros::master::getTopics(master_topics);
+
+	bool found = false;
+	for (const auto &t : master_topics) {
+		if (t.name == env_ptr->getHandleNamespace() + "/step/result") {
+			found = true;
+			break;
+		}
+	}
+	// Workaround to connect to action server, this is only needed in cpp
 	env_ptr->settings_.run = 1;
+	EXPECT_TRUE(found) << "Step action should be available!";
+	ros::spinOnce();
+	actionlib::SimpleActionClient<mujoco_ros_msgs::StepAction> ac(env_ptr->getHandleNamespace() + "/step", true);
+
+	mujoco_ros_msgs::StepGoal goal;
 	ac.sendGoal(goal);
 
 	EXPECT_TRUE(ac.waitForResult(ros::Duration(1.0))) << "Step action did not finish in time!";
-	EXPECT_TRUE(ac.getState() == actionlib::SimpleClientGoalState::PREEMPTED)
+	EXPECT_EQ(ac.getState(), actionlib::SimpleClientGoalState::PREEMPTED)
 	    << "Step action must be preempted when unpaused!";
-	EXPECT_EQ(ac.getResult()->success, false) << "Step action should have failed!";
+	EXPECT_FALSE(ac.getResult()->success) << "Step action should have failed!";
+}
+
+TEST_F(PendulumEnvFixture, StepGoalCancelPreempt)
+{
+	ros::master::V_TopicInfo master_topics;
+	ros::master::getTopics(master_topics);
+
+	bool found = false;
+	for (const auto &t : master_topics) {
+		if (t.name == env_ptr->getHandleNamespace() + "/step/result") {
+			found = true;
+			break;
+		}
+	}
+	// Workaround to connect to action server, this is only needed in cpp
+	env_ptr->settings_.run = 1;
+	EXPECT_TRUE(found) << "Step action should be available!";
+	ros::spinOnce();
+	actionlib::SimpleActionClient<mujoco_ros_msgs::StepAction> ac(env_ptr->getHandleNamespace() + "/step", true);
+	env_ptr->settings_.run = 0;
+
+	// Wait for paused state to be applied
+	std::this_thread::sleep_for(std::chrono::milliseconds(5));
+
+	mujoco_ros_msgs::StepGoal goal;
+	goal.num_steps = 1000;
+	ac.sendGoal(goal);
+	ac.cancelGoal();
+	ac.waitForResult();
+	EXPECT_EQ(ac.getState(), actionlib::SimpleClientGoalState::PREEMPTED);
+	EXPECT_FALSE(ac.getResult()->success) << "Step action should have failed!";
 }
 
 TEST_F(PendulumEnvFixture, DefaultInitialJointStates)
@@ -423,63 +513,128 @@ TEST_F(PendulumEnvFixture, CustomInitialJointStatesOnReset)
 	nh->deleteParam("initial_joint_velocities/joint_map");
 }
 
-TEST_F(PendulumEnvFixture, SetBodyStateCallback)
+TEST_F(PendulumEnvFixture, SetBodyStateNotAllowed)
 {
 	EXPECT_FALSE(env_ptr->settings_.run) << "Simulation should be paused!";
 	EXPECT_NEAR(env_ptr->getDataPtr()->time, 0, 1e-6) << "Simulation time should be 0.0!";
 	EXPECT_TRUE(ros::service::exists(env_ptr->getHandleNamespace() + "/set_body_state", true))
 	    << "Set body state service should be available!";
 
-	int id_free;
+	// Set eval mode and hash
+	env_ptr->setEvalMode(true);
+	env_ptr->setAdminHash("right_hash");
 
-	mjModel *m = env_ptr->getModelPtr();
-	mjData *d  = env_ptr->getDataPtr();
+	mujoco_ros_msgs::SetBodyState srv;
+	srv.request.admin_hash = "wrong_hash";
+	EXPECT_TRUE(ros::service::call(env_ptr->getHandleNamespace() + "/set_body_state", srv))
+	    << "set body state service call failed!";
+	EXPECT_FALSE(srv.response.success);
+}
 
-	id_free = mujoco_ros::util::jointName2id(m, "ball_freejoint");
+TEST_F(PendulumEnvFixture, SetBodyStateEmptyBodyName)
+{
+	EXPECT_TRUE(ros::service::exists(env_ptr->getHandleNamespace() + "/set_body_state", true))
+	    << "Set body state service should be available!";
 
 	mujoco_ros_msgs::SetBodyState srv;
 
 	// Invalid body_name
-	srv.request.state.name = "unknown";
 	EXPECT_TRUE(ros::service::call(env_ptr->getHandleNamespace() + "/set_body_state", srv))
 	    << "set body state service call failed!";
 	EXPECT_FALSE(srv.response.success);
+}
+
+TEST_F(PendulumEnvFixture, SetBodyStateInvalidBodyName)
+{
+	EXPECT_TRUE(ros::service::exists(env_ptr->getHandleNamespace() + "/set_body_state", true))
+	    << "Set body state service should be available!";
+
+	mujoco_ros_msgs::SetBodyState srv;
+	srv.request.state.name = "unknown";
+
+	// Invalid body_name
+	EXPECT_TRUE(ros::service::call(env_ptr->getHandleNamespace() + "/set_body_state", srv))
+	    << "set body state service call failed!";
+	EXPECT_FALSE(srv.response.success);
+}
+
+TEST_F(PendulumEnvFixture, SetBodyStateResolveBody)
+{
+	EXPECT_TRUE(ros::service::exists(env_ptr->getHandleNamespace() + "/set_body_state", true))
+	    << "Set body state service should be available!";
+
+	mujoco_ros_msgs::SetBodyState srv;
 
 	// Resolve body
 	srv.request.state.name = "middle_link";
 	EXPECT_TRUE(ros::service::call(env_ptr->getHandleNamespace() + "/set_body_state", srv))
 	    << "set body state service call failed!";
 	EXPECT_TRUE(srv.response.success);
+}
+
+TEST_F(PendulumEnvFixture, SetBodyStateResolveBodyFromGeom)
+{
+	EXPECT_TRUE(ros::service::exists(env_ptr->getHandleNamespace() + "/set_body_state", true))
+	    << "Set body state service should be available!";
+
+	mujoco_ros_msgs::SetBodyState srv;
 
 	// Resolve body from child geom
 	srv.request.state.name = "EE";
 	EXPECT_TRUE(ros::service::call(env_ptr->getHandleNamespace() + "/set_body_state", srv))
 	    << "set body state service call failed!";
 	EXPECT_TRUE(srv.response.success);
+}
 
-	// Position change errors
+TEST_F(PendulumEnvFixture, SetBodyStatePosNonFreejointError)
+{
+	EXPECT_TRUE(ros::service::exists(env_ptr->getHandleNamespace() + "/set_body_state", true))
+	    << "Set body state service should be available!";
+
+	mujoco_ros_msgs::SetBodyState srv;
 	srv.request.set_pose = true;
 
 	//   Not a freejoint
 	EXPECT_TRUE(ros::service::call(env_ptr->getHandleNamespace() + "/set_body_state", srv))
 	    << "set body state service call failed!";
 	EXPECT_FALSE(srv.response.success);
+}
 
-	//   No joint
+TEST_F(PendulumEnvFixture, SetBodyStatePosNoJointError)
+{
+	EXPECT_TRUE(ros::service::exists(env_ptr->getHandleNamespace() + "/set_body_state", true))
+	    << "Set body state service should be available!";
+
+	mujoco_ros_msgs::SetBodyState srv;
+	srv.request.set_pose = true;
+
 	srv.request.state.name = "immovable";
 	EXPECT_TRUE(ros::service::call(env_ptr->getHandleNamespace() + "/set_body_state", srv))
 	    << "set body state service call failed!";
 	EXPECT_FALSE(srv.response.success);
+}
 
-	//   unknown frame_id
+TEST_F(PendulumEnvFixture, SetBodyStatePosUnknownFrameID)
+{
+	EXPECT_TRUE(ros::service::exists(env_ptr->getHandleNamespace() + "/set_body_state", true))
+	    << "Set body state service should be available!";
+
+	mujoco_ros_msgs::SetBodyState srv;
+	srv.request.set_pose = true;
+
 	srv.request.state.name                 = "ball";
 	srv.request.state.pose.header.frame_id = "unknown";
 	EXPECT_TRUE(ros::service::call(env_ptr->getHandleNamespace() + "/set_body_state", srv))
 	    << "set body state service call failed!";
 	EXPECT_FALSE(srv.response.success);
+}
 
-	// Twist change errors
-	srv.request.set_pose  = false;
+TEST_F(PendulumEnvFixture, SetBodyStateTwistNotWorldFrame)
+{
+	EXPECT_TRUE(ros::service::exists(env_ptr->getHandleNamespace() + "/set_body_state", true))
+	    << "Set body state service should be available!";
+
+	mujoco_ros_msgs::SetBodyState srv;
 	srv.request.set_twist = true;
 
 	//   other frame_id than world
@@ -487,9 +642,26 @@ TEST_F(PendulumEnvFixture, SetBodyStateCallback)
 	EXPECT_TRUE(ros::service::call(env_ptr->getHandleNamespace() + "/set_body_state", srv))
 	    << "set body state service call failed!";
 	EXPECT_FALSE(srv.response.success);
+}
 
+TEST_F(PendulumEnvFixture, SetBodyStatePosAndTwist)
+{
+	EXPECT_FALSE(env_ptr->settings_.run) << "Simulation should be paused!";
+	EXPECT_NEAR(env_ptr->getDataPtr()->time, 0, 1e-6) << "Simulation time should be 0.0!";
+	EXPECT_TRUE(ros::service::exists(env_ptr->getHandleNamespace() + "/set_body_state", true))
+	    << "Set body state service should be available!";
+
+	mjModel *m = env_ptr->getModelPtr();
+	mjData *d  = env_ptr->getDataPtr();
+
+	int id_free = mujoco_ros::util::jointName2id(m, "ball_freejoint");
+
+	mujoco_ros_msgs::SetBodyState srv;
+	srv.request.state.name = "ball";
 	// New twist and pose
-	srv.request.set_pose                      = true;
+	srv.request.set_twist = true;
+	srv.request.set_pose  = true;
+
 	srv.request.state.pose.header.frame_id    = "world";
 	srv.request.state.pose.pose.position.x    = 2;
 	srv.request.state.pose.pose.position.y    = 2;
@@ -513,10 +685,20 @@ TEST_F(PendulumEnvFixture, SetBodyStateCallback)
 	compare_qpos(d, m->jnt_qposadr[id_free], "ball_freejoint", { 2.0, 2.0, 2.0, 0.0, 0.707, 0.0, 0.707 },
 	             { 0.0, 0.0, 0.0, 0.0, 9e-4, 0.0, 9e-4 });
 	compare_qvel(d, m->jnt_dofadr[id_free], "ball_freejoint", { 0.1, 0.1, -0.1, 0.1, 0.0, 0.0 });
+}
 
+TEST_F(PendulumEnvFixture, SetBodyStateMass)
+{
+	EXPECT_FALSE(env_ptr->settings_.run) << "Simulation should be paused!";
+	EXPECT_NEAR(env_ptr->getDataPtr()->time, 0, 1e-6) << "Simulation time should be 0.0!";
+	EXPECT_TRUE(ros::service::exists(env_ptr->getHandleNamespace() + "/set_body_state", true))
+	    << "Set body state service should be available!";
+
+	mjModel *m = env_ptr->getModelPtr();
+
+	mujoco_ros_msgs::SetBodyState srv;
+	srv.request.state.name = "ball";
 	// New mass
-	srv.request.set_pose   = false;
-	srv.request.set_twist  = false;
 	srv.request.set_mass   = true;
 	srv.request.state.mass = 0.299f;
 	EXPECT_NE(m->body_mass[mj_name2id(m, mjOBJ_BODY, "body_ball")], srv.request.state.mass)
@@ -527,8 +709,23 @@ TEST_F(PendulumEnvFixture, SetBodyStateCallback)
 
 	EXPECT_EQ(m->body_mass[mj_name2id(m, mjOBJ_BODY, "body_ball")], srv.request.state.mass)
 	    << "Mass did not change to the requested value";
+}
+
+TEST_F(PendulumEnvFixture, SetBodyStateResetQPos)
+{
+	EXPECT_FALSE(env_ptr->settings_.run) << "Simulation should be paused!";
+	EXPECT_NEAR(env_ptr->getDataPtr()->time, 0, 1e-6) << "Simulation time should be 0.0!";
+	EXPECT_TRUE(ros::service::exists(env_ptr->getHandleNamespace() + "/set_body_state", true))
+	    << "Set body state service should be available!";
+
+	mjModel *m = env_ptr->getModelPtr();
+	mjData *d  = env_ptr->getDataPtr();
+
+	int id_free = mujoco_ros::util::jointName2id(m, "ball_freejoint");
+
+	mujoco_ros_msgs::SetBodyState srv;
+	srv.request.state.name = "ball";
 	// reset
-	srv.request.set_mass   = false;
 	srv.request.reset_qpos = true;
 	EXPECT_TRUE(ros::service::call(env_ptr->getHandleNamespace() + "/set_body_state", srv))
 	    << "set body state service call failed!";
@@ -536,6 +733,40 @@ TEST_F(PendulumEnvFixture, SetBodyStateCallback)
 
 	compare_qpos(d, m->jnt_qposadr[id_free], "ball_freejoint", { 1.0, 0.0, 0.06, 1.0, 0.0, 0.0, 0.0 });
 	compare_qvel(d, m->jnt_dofadr[id_free], "ball_freejoint", { 0.0, 0.0, 0.0, 0.0, 0.0, 0.0 });
+}
+
+TEST_F(PendulumEnvFixture, GetBodyStateNotAllowed)
+{
+	EXPECT_FALSE(env_ptr->settings_.run) << "Simulation should be paused!";
+	EXPECT_NEAR(env_ptr->getDataPtr()->time, 0, 1e-6) << "Simulation time should be 0.0!";
+	EXPECT_TRUE(ros::service::exists(env_ptr->getHandleNamespace() + "/get_body_state", true))
+	    << "Get body state service should be available!";
+
+	// set eval mode and hash
+	env_ptr->setEvalMode(true);
+	env_ptr->setAdminHash("right_hash");
+
+	mujoco_ros_msgs::GetBodyState g_srv;
+	g_srv.request.admin_hash = "wrong_hash";
+
+	EXPECT_TRUE(ros::service::call(env_ptr->getHandleNamespace() + "/get_body_state", g_srv))
+	    << "get body state service call failed!";
+	EXPECT_FALSE(g_srv.response.success);
+}
+
+TEST_F(PendulumEnvFixture, GetBodyStateNameEmpty)
+{
+	EXPECT_FALSE(env_ptr->settings_.run) << "Simulation should be paused!";
+	EXPECT_NEAR(env_ptr->getDataPtr()->time, 0, 1e-6) << "Simulation time should be 0.0!";
+	EXPECT_TRUE(ros::service::exists(env_ptr->getHandleNamespace() + "/set_body_state", true))
+	    << "Set body state service should be available!";
+	EXPECT_TRUE(ros::service::exists(env_ptr->getHandleNamespace() + "/get_body_state", true))
+	    << "Get body state service should be available!";
+
+	mujoco_ros_msgs::GetBodyState g_srv;
+	EXPECT_TRUE(ros::service::call(env_ptr->getHandleNamespace() + "/get_body_state", g_srv))
+	    << "get body state service call failed!";
+	EXPECT_FALSE(g_srv.response.success);
 }
 
 TEST_F(PendulumEnvFixture, GetBodyStateInvalidName)
@@ -553,6 +784,21 @@ TEST_F(PendulumEnvFixture, GetBodyStateInvalidName)
 	EXPECT_TRUE(ros::service::call(env_ptr->getHandleNamespace() + "/get_body_state", g_srv))
 	    << "get body state service call failed!";
 	EXPECT_FALSE(g_srv.response.success);
+}
+
+TEST_F(PendulumEnvFixture, GetBodyStateResolveBodyFromGeom)
+{
+	EXPECT_FALSE(env_ptr->settings_.run) << "Simulation should be paused!";
+	EXPECT_NEAR(env_ptr->getDataPtr()->time, 0, 1e-6) << "Simulation time should be 0.0!";
+	EXPECT_TRUE(ros::service::exists(env_ptr->getHandleNamespace() + "/get_body_state", true))
+	    << "Get body state service should be available!";
+
+	mujoco_ros_msgs::GetBodyState g_srv;
+	g_srv.request.name = "EE";
+	EXPECT_TRUE(ros::service::call(env_ptr->getHandleNamespace() + "/get_body_state", g_srv))
+	    << "get body state service call failed!";
+	EXPECT_TRUE(g_srv.response.success);
+	EXPECT_EQ(g_srv.response.state.name, "end_link");
 }
 
 TEST_F(PendulumEnvFixture, GetBodyStateStaticBody)
@@ -586,7 +832,38 @@ TEST_F(PendulumEnvFixture, GetBodyStateStaticBody)
 	EXPECT_DOUBLE_EQ(g_srv.response.state.twist.twist.angular.z, 0.0);
 }
 
-TEST_F(PendulumEnvFixture, GetBodyStateCallback)
+TEST_F(PendulumEnvFixture, GetBodyStateMultijoint)
+{
+	EXPECT_FALSE(env_ptr->settings_.run) << "Simulation should be paused!";
+	EXPECT_NEAR(env_ptr->getDataPtr()->time, 0, 1e-6) << "Simulation time should be 0.0!";
+	EXPECT_TRUE(ros::service::exists(env_ptr->getHandleNamespace() + "/set_body_state", true))
+	    << "Set body state service should be available!";
+	EXPECT_TRUE(ros::service::exists(env_ptr->getHandleNamespace() + "/get_body_state", true))
+	    << "Get body state service should be available!";
+
+	mujoco_ros_msgs::GetBodyState g_srv;
+	g_srv.request.name = "multijoint";
+	EXPECT_TRUE(ros::service::call(env_ptr->getHandleNamespace() + "/get_body_state", g_srv))
+	    << "get body state service call failed!";
+	EXPECT_TRUE(g_srv.response.success);
+	EXPECT_EQ(g_srv.response.state.name, "multijoint");
+	EXPECT_DOUBLE_EQ(g_srv.response.state.mass, 5.4286723136901855);
+	EXPECT_DOUBLE_EQ(g_srv.response.state.pose.pose.position.x, 2.0);
+	EXPECT_DOUBLE_EQ(g_srv.response.state.pose.pose.position.y, 1.0);
+	EXPECT_DOUBLE_EQ(g_srv.response.state.pose.pose.position.z, 0.5);
+	EXPECT_DOUBLE_EQ(g_srv.response.state.pose.pose.orientation.w, 1.0);
+	EXPECT_DOUBLE_EQ(g_srv.response.state.pose.pose.orientation.x, 0.0);
+	EXPECT_DOUBLE_EQ(g_srv.response.state.pose.pose.orientation.y, 0.0);
+	EXPECT_DOUBLE_EQ(g_srv.response.state.pose.pose.orientation.z, 0.0);
+	EXPECT_DOUBLE_EQ(g_srv.response.state.twist.twist.linear.x, 0.0);
+	EXPECT_DOUBLE_EQ(g_srv.response.state.twist.twist.linear.y, 0.0);
+	EXPECT_DOUBLE_EQ(g_srv.response.state.twist.twist.linear.z, 0.0);
+	EXPECT_DOUBLE_EQ(g_srv.response.state.twist.twist.angular.x, 0.0);
+	EXPECT_DOUBLE_EQ(g_srv.response.state.twist.twist.angular.y, 0.0);
+	EXPECT_DOUBLE_EQ(g_srv.response.state.twist.twist.angular.z, 0.0);
+}
+
+TEST_F(PendulumEnvFixture, GetBodyStateFreejoint)
 {
 	EXPECT_FALSE(env_ptr->settings_.run) << "Simulation should be paused!";
 	EXPECT_NEAR(env_ptr->getDataPtr()->time, 0, 1e-6) << "Simulation time should be 0.0!";
@@ -631,11 +908,227 @@ TEST_F(PendulumEnvFixture, GetBodyStateCallback)
 	EXPECT_EQ(g_srv.response.state.pose.pose.position, srv.request.state.pose.pose.position);
 	EXPECT_EQ(g_srv.response.state.pose.pose.orientation, srv.request.state.pose.pose.orientation);
 	EXPECT_EQ(g_srv.response.state.twist.twist, srv.request.state.twist.twist);
-
-	// TODO(dleins): tests for bodies with a non-freejoint, no joint, and multiple joints (cannot set position but read!)
 }
 
-TEST_F(PendulumEnvFixture, SetGeomPropertiesCallback)
+TEST_F(PendulumEnvFixture, SetGeomPropertiesNameEmpty)
+{
+	EXPECT_FALSE(env_ptr->settings_.run) << "Simulation should be paused!";
+	EXPECT_NEAR(env_ptr->getDataPtr()->time, 0, 1e-6) << "Simulation time should be 0.0!";
+	EXPECT_TRUE(ros::service::exists(env_ptr->getHandleNamespace() + "/set_geom_properties", true))
+	    << "Set geom properties service should be available!";
+
+	mujoco_ros_msgs::SetGeomProperties srv;
+
+	EXPECT_TRUE(ros::service::call(env_ptr->getHandleNamespace() + "/set_geom_properties", srv))
+	    << "Set geom properties service call failed!";
+	EXPECT_FALSE(srv.response.success);
+}
+
+TEST_F(PendulumEnvFixture, SetGeomPropertiesInvalidGeomName)
+{
+	EXPECT_FALSE(env_ptr->settings_.run) << "Simulation should be paused!";
+	EXPECT_NEAR(env_ptr->getDataPtr()->time, 0, 1e-6) << "Simulation time should be 0.0!";
+	EXPECT_TRUE(ros::service::exists(env_ptr->getHandleNamespace() + "/set_geom_properties", true))
+	    << "Set geom properties service should be available!";
+
+	mujoco_ros_msgs::SetGeomProperties srv;
+
+	// Invalid geom_name
+	srv.request.properties.name = "unknown";
+	EXPECT_TRUE(ros::service::call(env_ptr->getHandleNamespace() + "/set_geom_properties", srv))
+	    << "Set geom properties service call failed!";
+	EXPECT_FALSE(srv.response.success);
+}
+
+TEST_F(PendulumEnvFixture, SetGeomPropertiesValidGeomName)
+{
+	EXPECT_FALSE(env_ptr->settings_.run) << "Simulation should be paused!";
+	EXPECT_NEAR(env_ptr->getDataPtr()->time, 0, 1e-6) << "Simulation time should be 0.0!";
+	EXPECT_TRUE(ros::service::exists(env_ptr->getHandleNamespace() + "/set_geom_properties", true))
+	    << "Set geom properties service should be available!";
+
+	mujoco_ros_msgs::SetGeomProperties srv;
+
+	// Resolve geom
+	srv.request.properties.name = "ball";
+	EXPECT_TRUE(ros::service::call(env_ptr->getHandleNamespace() + "/set_geom_properties", srv))
+	    << "Set geom properties service call failed!";
+	EXPECT_TRUE(srv.response.success);
+}
+
+TEST_F(PendulumEnvFixture, SetGeomPropertiesMass)
+{
+	EXPECT_FALSE(env_ptr->settings_.run) << "Simulation should be paused!";
+	EXPECT_NEAR(env_ptr->getDataPtr()->time, 0, 1e-6) << "Simulation time should be 0.0!";
+	EXPECT_TRUE(ros::service::exists(env_ptr->getHandleNamespace() + "/set_geom_properties", true))
+	    << "Set geom properties service should be available!";
+
+	mjModel *m = env_ptr->getModelPtr();
+
+	int ball_body_id = mj_name2id(m, mjOBJ_BODY, "body_ball");
+	EXPECT_NE(ball_body_id, -1) << "'body_ball' should be found as body in model!";
+
+	mujoco_ros_msgs::SetGeomProperties srv;
+	srv.request.properties.name = "ball";
+	// set mass
+	srv.request.set_mass             = true;
+	srv.request.properties.body_mass = 0.299f;
+	EXPECT_NE(m->body_mass[ball_body_id], srv.request.properties.body_mass) << "Mass already has requested value!";
+	EXPECT_TRUE(ros::service::call(env_ptr->getHandleNamespace() + "/set_geom_properties", srv))
+	    << "Set geom properties service call failed!";
+	EXPECT_TRUE(srv.response.success);
+	EXPECT_EQ(m->body_mass[ball_body_id], srv.request.properties.body_mass)
+	    << "Mass did not change to the requested value";
+}
+
+TEST_F(PendulumEnvFixture, SetGeomPropertiesFriction)
+{
+	EXPECT_FALSE(env_ptr->settings_.run) << "Simulation should be paused!";
+	EXPECT_NEAR(env_ptr->getDataPtr()->time, 0, 1e-6) << "Simulation time should be 0.0!";
+	EXPECT_TRUE(ros::service::exists(env_ptr->getHandleNamespace() + "/set_geom_properties", true))
+	    << "Set geom properties service should be available!";
+
+	mjModel *m = env_ptr->getModelPtr();
+
+	int ball_geom_id = mj_name2id(m, mjOBJ_GEOM, "ball");
+	EXPECT_NE(ball_geom_id, -1) << "'ball' should be found as geom in model!";
+
+	mujoco_ros_msgs::SetGeomProperties srv;
+	srv.request.properties.name = "ball";
+	// set friction
+	srv.request.set_friction              = true;
+	srv.request.properties.friction_slide = 0;
+	srv.request.properties.friction_spin  = 0;
+	srv.request.properties.friction_roll  = 0;
+	EXPECT_TRUE(m->geom_friction[ball_geom_id * 3] != 0 && m->geom_friction[ball_geom_id * 3 + 1] != 0 &&
+	            m->geom_friction[ball_geom_id * 3 + 2] != 0)
+	    << "Some friction values already at 0!";
+	EXPECT_TRUE(ros::service::call(env_ptr->getHandleNamespace() + "/set_geom_properties", srv))
+	    << "Set geom properties service call failed!";
+	EXPECT_TRUE(srv.response.success);
+	EXPECT_TRUE(m->geom_friction[ball_geom_id * 3] == 0) << "Slide friction unchanged!";
+	EXPECT_TRUE(m->geom_friction[ball_geom_id * 3 + 1] == 0) << "Spin friction unchanged!";
+	EXPECT_TRUE(m->geom_friction[ball_geom_id * 3 + 2] == 0) << "Roll friction uncahnged!";
+}
+
+// set type (not checking PLANE, HFIELD, MESH, and rendering types)
+TEST_F(PendulumEnvFixture, SetGeomPropertiesTypeBox)
+{
+	EXPECT_FALSE(env_ptr->settings_.run) << "Simulation should be paused!";
+	EXPECT_NEAR(env_ptr->getDataPtr()->time, 0, 1e-6) << "Simulation time should be 0.0!";
+	EXPECT_TRUE(ros::service::exists(env_ptr->getHandleNamespace() + "/set_geom_properties", true))
+	    << "Set geom properties service should be available!";
+
+	mjModel *m = env_ptr->getModelPtr();
+
+	int ball_geom_id = mj_name2id(m, mjOBJ_GEOM, "ball");
+	EXPECT_NE(ball_geom_id, -1) << "'ball' should be found as geom in model!";
+
+	mujoco_ros_msgs::SetGeomProperties srv;
+	srv.request.properties.name = "ball";
+	srv.request.set_type        = true;
+	//   BOX
+	srv.request.properties.type.value = mujoco_ros_msgs::GeomType::BOX;
+	EXPECT_NE(m->geom_type[ball_geom_id], mjGEOM_BOX) << "Geom already is of type BOX";
+	EXPECT_TRUE(ros::service::call(env_ptr->getHandleNamespace() + "/set_geom_properties", srv))
+	    << "Set geom properties service call failed!";
+	EXPECT_TRUE(srv.response.success);
+	EXPECT_EQ(m->geom_type[ball_geom_id], mjGEOM_BOX) << "Geom unchanged";
+}
+
+TEST_F(PendulumEnvFixture, SetGeomPropertiesTypeCylinder)
+{
+	EXPECT_FALSE(env_ptr->settings_.run) << "Simulation should be paused!";
+	EXPECT_NEAR(env_ptr->getDataPtr()->time, 0, 1e-6) << "Simulation time should be 0.0!";
+	EXPECT_TRUE(ros::service::exists(env_ptr->getHandleNamespace() + "/set_geom_properties", true))
+	    << "Set geom properties service should be available!";
+
+	mjModel *m = env_ptr->getModelPtr();
+
+	int ball_geom_id = mj_name2id(m, mjOBJ_GEOM, "ball");
+	EXPECT_NE(ball_geom_id, -1) << "'ball' should be found as geom in model!";
+
+	mujoco_ros_msgs::SetGeomProperties srv;
+	srv.request.properties.name = "ball";
+	srv.request.set_type        = true;
+	//   CYLINDER
+	srv.request.properties.type.value = mujoco_ros_msgs::GeomType::CYLINDER;
+	EXPECT_TRUE(ros::service::call(env_ptr->getHandleNamespace() + "/set_geom_properties", srv))
+	    << "Set geom properties service call failed!";
+	EXPECT_TRUE(srv.response.success);
+	EXPECT_EQ(m->geom_type[ball_geom_id], mjGEOM_CYLINDER) << "Geom unchanged";
+}
+
+TEST_F(PendulumEnvFixture, SetGeomPropertiesTypeEllipsoid)
+{
+	EXPECT_FALSE(env_ptr->settings_.run) << "Simulation should be paused!";
+	EXPECT_NEAR(env_ptr->getDataPtr()->time, 0, 1e-6) << "Simulation time should be 0.0!";
+	EXPECT_TRUE(ros::service::exists(env_ptr->getHandleNamespace() + "/set_geom_properties", true))
+	    << "Set geom properties service should be available!";
+
+	mjModel *m = env_ptr->getModelPtr();
+
+	int ball_geom_id = mj_name2id(m, mjOBJ_GEOM, "ball");
+	EXPECT_NE(ball_geom_id, -1) << "'ball' should be found as geom in model!";
+
+	mujoco_ros_msgs::SetGeomProperties srv;
+	srv.request.properties.name = "ball";
+	srv.request.set_type        = true;
+	//  ELLIPSOID
+	srv.request.properties.type.value = mujoco_ros_msgs::GeomType::ELLIPSOID;
+	EXPECT_TRUE(ros::service::call(env_ptr->getHandleNamespace() + "/set_geom_properties", srv))
+	    << "Set geom properties service call failed!";
+	EXPECT_TRUE(srv.response.success);
+	EXPECT_EQ(m->geom_type[ball_geom_id], mjGEOM_ELLIPSOID) << "Geom unchanged";
+}
+
+TEST_F(PendulumEnvFixture, SetGeomPropertiesTypeCapsule)
+{
+	EXPECT_FALSE(env_ptr->settings_.run) << "Simulation should be paused!";
+	EXPECT_NEAR(env_ptr->getDataPtr()->time, 0, 1e-6) << "Simulation time should be 0.0!";
+	EXPECT_TRUE(ros::service::exists(env_ptr->getHandleNamespace() + "/set_geom_properties", true))
+	    << "Set geom properties service should be available!";
+
+	mjModel *m = env_ptr->getModelPtr();
+
+	int ball_geom_id = mj_name2id(m, mjOBJ_GEOM, "ball");
+	EXPECT_NE(ball_geom_id, -1) << "'ball' should be found as geom in model!";
+
+	mujoco_ros_msgs::SetGeomProperties srv;
+	srv.request.set_type        = true;
+	srv.request.properties.name = "ball";
+	//  CAPSULE
+	srv.request.properties.type.value = mujoco_ros_msgs::GeomType::CAPSULE;
+	EXPECT_TRUE(ros::service::call(env_ptr->getHandleNamespace() + "/set_geom_properties", srv))
+	    << "Set geom properties service call failed!";
+	EXPECT_TRUE(srv.response.success);
+	EXPECT_EQ(m->geom_type[ball_geom_id], mjGEOM_CAPSULE) << "Geom unchanged";
+}
+
+TEST_F(PendulumEnvFixture, SetGeomPropertiesTypeSphere)
+{
+	EXPECT_FALSE(env_ptr->settings_.run) << "Simulation should be paused!";
+	EXPECT_NEAR(env_ptr->getDataPtr()->time, 0, 1e-6) << "Simulation time should be 0.0!";
+	EXPECT_TRUE(ros::service::exists(env_ptr->getHandleNamespace() + "/set_geom_properties", true))
+	    << "Set geom properties service should be available!";
+
+	mjModel *m = env_ptr->getModelPtr();
+
+	int ball_geom_id = mj_name2id(m, mjOBJ_GEOM, "ball");
+	EXPECT_NE(ball_geom_id, -1) << "'ball' should be found as geom in model!";
+
+	mujoco_ros_msgs::SetGeomProperties srv;
+	srv.request.properties.name = "ball";
+	srv.request.set_type        = true;
+	//  SPHERE
+	srv.request.properties.type.value = mujoco_ros_msgs::GeomType::SPHERE;
+	EXPECT_TRUE(ros::service::call(env_ptr->getHandleNamespace() + "/set_geom_properties", srv))
+	    << "Set geom properties service call failed!";
+	EXPECT_TRUE(srv.response.success);
+	EXPECT_EQ(m->geom_type[ball_geom_id], mjGEOM_SPHERE) << "Geom unchanged";
+}
+
+TEST_F(PendulumEnvFixture, SetGeomPropertiesSize)
 {
 	EXPECT_FALSE(env_ptr->settings_.run) << "Simulation should be paused!";
 	EXPECT_NEAR(env_ptr->getDataPtr()->time, 0, 1e-6) << "Simulation time should be 0.0!";
@@ -651,82 +1144,7 @@ TEST_F(PendulumEnvFixture, SetGeomPropertiesCallback)
 	EXPECT_NE(ball_body_id, -1) << "'body_ball' should be found as body in model!";
 
 	mujoco_ros_msgs::SetGeomProperties srv;
-
-	// Invalid geom_name
-	srv.request.properties.name = "unknown";
-	EXPECT_TRUE(ros::service::call(env_ptr->getHandleNamespace() + "/set_geom_properties", srv))
-	    << "Set geom properties service call failed!";
-	EXPECT_FALSE(srv.response.success);
-
-	// Resolve geom
-	srv.request.properties.name = "ball";
-	EXPECT_TRUE(ros::service::call(env_ptr->getHandleNamespace() + "/set_geom_properties", srv))
-	    << "Set geom properties service call failed!";
-	EXPECT_TRUE(srv.response.success);
-
-	// set mass
-	srv.request.set_mass             = true;
-	srv.request.properties.body_mass = 0.299f;
-	EXPECT_NE(m->body_mass[ball_body_id], srv.request.properties.body_mass) << "Mass already has requested value!";
-	EXPECT_TRUE(ros::service::call(env_ptr->getHandleNamespace() + "/set_geom_properties", srv))
-	    << "Set geom properties service call failed!";
-	EXPECT_TRUE(srv.response.success);
-	EXPECT_EQ(m->body_mass[ball_body_id], srv.request.properties.body_mass)
-	    << "Mass did not change to the requested value";
-
-	// set friction
-	srv.request.set_mass                  = false;
-	srv.request.set_friction              = true;
-	srv.request.properties.friction_slide = 0;
-	srv.request.properties.friction_spin  = 0;
-	srv.request.properties.friction_roll  = 0;
-	EXPECT_TRUE(m->geom_friction[ball_geom_id * 3] != 0 && m->geom_friction[ball_geom_id * 3 + 1] != 0 &&
-	            m->geom_friction[ball_geom_id * 3 + 2] != 0)
-	    << "Some friction values already at 0!";
-	EXPECT_TRUE(ros::service::call(env_ptr->getHandleNamespace() + "/set_geom_properties", srv))
-	    << "Set geom properties service call failed!";
-	EXPECT_TRUE(srv.response.success);
-	EXPECT_TRUE(m->geom_friction[ball_geom_id * 3] == 0) << "Slide friction unchanged!";
-	EXPECT_TRUE(m->geom_friction[ball_geom_id * 3 + 1] == 0) << "Spin friction unchanged!";
-	EXPECT_TRUE(m->geom_friction[ball_geom_id * 3 + 2] == 0) << "Roll friction uncahnged!";
-
-	// set type (not checking PLANE, HFIELD, MESH, and rendering types)
-	srv.request.set_friction = false;
-	srv.request.set_type     = true;
-	//   BOX
-	srv.request.properties.type.value = mujoco_ros_msgs::GeomType::BOX;
-	EXPECT_NE(m->geom_type[ball_geom_id], mjGEOM_BOX) << "Geom already is of type BOX";
-	EXPECT_TRUE(ros::service::call(env_ptr->getHandleNamespace() + "/set_geom_properties", srv))
-	    << "Set geom properties service call failed!";
-	EXPECT_TRUE(srv.response.success);
-	EXPECT_EQ(m->geom_type[ball_geom_id], mjGEOM_BOX) << "Geom unchanged";
-	//   CYLINDER
-	srv.request.properties.type.value = mujoco_ros_msgs::GeomType::CYLINDER;
-	EXPECT_TRUE(ros::service::call(env_ptr->getHandleNamespace() + "/set_geom_properties", srv))
-	    << "Set geom properties service call failed!";
-	EXPECT_TRUE(srv.response.success);
-	EXPECT_EQ(m->geom_type[ball_geom_id], mjGEOM_CYLINDER) << "Geom unchanged";
-	//  ELLIPSOID
-	srv.request.properties.type.value = mujoco_ros_msgs::GeomType::ELLIPSOID;
-	EXPECT_TRUE(ros::service::call(env_ptr->getHandleNamespace() + "/set_geom_properties", srv))
-	    << "Set geom properties service call failed!";
-	EXPECT_TRUE(srv.response.success);
-	EXPECT_EQ(m->geom_type[ball_geom_id], mjGEOM_ELLIPSOID) << "Geom unchanged";
-	//  CAPSULE
-	srv.request.properties.type.value = mujoco_ros_msgs::GeomType::CAPSULE;
-	EXPECT_TRUE(ros::service::call(env_ptr->getHandleNamespace() + "/set_geom_properties", srv))
-	    << "Set geom properties service call failed!";
-	EXPECT_TRUE(srv.response.success);
-	EXPECT_EQ(m->geom_type[ball_geom_id], mjGEOM_CAPSULE) << "Geom unchanged";
-	//  SPHERE
-	srv.request.properties.type.value = mujoco_ros_msgs::GeomType::SPHERE;
-	EXPECT_TRUE(ros::service::call(env_ptr->getHandleNamespace() + "/set_geom_properties", srv))
-	    << "Set geom properties service call failed!";
-	EXPECT_TRUE(srv.response.success);
-	EXPECT_EQ(m->geom_type[ball_geom_id], mjGEOM_SPHERE) << "Geom unchanged";
-
-	// set size
-	srv.request.set_type          = false;
+	srv.request.properties.name   = "ball";
 	srv.request.set_size          = true;
 	srv.request.properties.size_0 = 0.01f;
 	srv.request.properties.size_1 = 0.01f;
@@ -741,14 +1159,62 @@ TEST_F(PendulumEnvFixture, SetGeomPropertiesCallback)
 	EXPECT_NEAR(m->geom_size[ball_geom_id * 3 + 2], 0.01, 9e-4) << "Size 2 unchanged";
 }
 
-TEST_F(PendulumEnvFixture, GetGeomPropertiesCallback)
+TEST_F(PendulumEnvFixture, GetGeomPropertiesNotAllowed)
+{
+	EXPECT_FALSE(env_ptr->settings_.run) << "Simulation should be paused!";
+	EXPECT_NEAR(env_ptr->getDataPtr()->time, 0, 1e-6) << "Simulation time should be 0.0!";
+	EXPECT_TRUE(ros::service::exists(env_ptr->getHandleNamespace() + "/get_geom_properties", true))
+	    << "Get geom properties service should be available!";
+
+	// set eval mode and hash
+	env_ptr->setEvalMode(true);
+	env_ptr->setAdminHash("right_hash");
+
+	mujoco_ros_msgs::GetGeomProperties g_srv;
+	g_srv.request.admin_hash = "wrong_hash";
+
+	EXPECT_TRUE(ros::service::call(env_ptr->getHandleNamespace() + "/get_geom_properties", g_srv))
+	    << "Get geom properties service call failed!";
+	EXPECT_FALSE(g_srv.response.success);
+}
+
+TEST_F(PendulumEnvFixture, GetGeomPropertiesNameEmpty)
+{
+	EXPECT_FALSE(env_ptr->settings_.run) << "Simulation should be paused!";
+	EXPECT_NEAR(env_ptr->getDataPtr()->time, 0, 1e-6) << "Simulation time should be 0.0!";
+	EXPECT_TRUE(ros::service::exists(env_ptr->getHandleNamespace() + "/get_geom_properties", true))
+	    << "Get geom properties service should be available!";
+
+	mujoco_ros_msgs::GetGeomProperties g_srv;
+
+	EXPECT_TRUE(ros::service::call(env_ptr->getHandleNamespace() + "/get_geom_properties", g_srv))
+	    << "Get geom properties service call failed!";
+	EXPECT_FALSE(g_srv.response.success);
+}
+
+TEST_F(PendulumEnvFixture, GetGeomPropertiesInvalidGeomName)
+{
+	EXPECT_FALSE(env_ptr->settings_.run) << "Simulation should be paused!";
+	EXPECT_NEAR(env_ptr->getDataPtr()->time, 0, 1e-6) << "Simulation time should be 0.0!";
+	EXPECT_TRUE(ros::service::exists(env_ptr->getHandleNamespace() + "/get_geom_properties", true))
+	    << "Get geom properties service should be available!";
+
+	mujoco_ros_msgs::GetGeomProperties g_srv;
+	g_srv.request.geom_name = "unknown";
+
+	EXPECT_TRUE(ros::service::call(env_ptr->getHandleNamespace() + "/get_geom_properties", g_srv))
+	    << "Get geom properties service call failed!";
+	EXPECT_FALSE(g_srv.response.success);
+}
+
+TEST_F(PendulumEnvFixture, GetGeomPropertiesValidGeomName)
 {
 	EXPECT_FALSE(env_ptr->settings_.run) << "Simulation should be paused!";
 	EXPECT_NEAR(env_ptr->getDataPtr()->time, 0, 1e-6) << "Simulation time should be 0.0!";
 	EXPECT_TRUE(ros::service::exists(env_ptr->getHandleNamespace() + "/set_geom_properties", true))
 	    << "Set geom properties service should be available!";
 	EXPECT_TRUE(ros::service::exists(env_ptr->getHandleNamespace() + "/get_geom_properties", true))
-	    << "Set geom properties service should be available!";
+	    << "Get geom properties service should be available!";
 
 	mujoco_ros_msgs::SetGeomProperties srv;
 	srv.request.set_type                  = true;
@@ -769,11 +1235,6 @@ TEST_F(PendulumEnvFixture, GetGeomPropertiesCallback)
 	EXPECT_TRUE(srv.response.success);
 
 	mujoco_ros_msgs::GetGeomProperties g_srv;
-	// wrong geom name
-	g_srv.request.geom_name = "unknown";
-	EXPECT_TRUE(ros::service::call(env_ptr->getHandleNamespace() + "/get_geom_properties", g_srv))
-	    << "Get geom properties service call failed!";
-	EXPECT_FALSE(g_srv.response.success);
 
 	g_srv.request.geom_name = "ball";
 	EXPECT_TRUE(ros::service::call(env_ptr->getHandleNamespace() + "/get_geom_properties", g_srv))
@@ -1001,33 +1462,41 @@ void compare_eqc_values_with_msg(mjModel *m, mjData *d, int eq_id,
 
 // TODO: Should we test changing element1 and/or element2?
 // are changes like that valid?
-TEST_F(EqualityEnvFixture, SetEqConstraint)
+TEST_F(EqualityEnvFixture, SetEqConstraintNotAllowed)
 {
-	mjModel *m = env_ptr->getModelPtr();
-	mjData *d  = env_ptr->getDataPtr();
+	// set eval mode and admin hash
+	env_ptr->setEvalMode(true);
+	env_ptr->setAdminHash("right_hash");
 
-	EXPECT_FALSE(env_ptr->settings_.run) << "Simulation should be paused!";
-	EXPECT_NEAR(d->time, 0, 1e-6) << "Simulation time should be 0.0!";
+	mujoco_ros_msgs::SetEqualityConstraintParameters srv;
+	srv.request.admin_hash = "wrong_hash";
+
+	EXPECT_TRUE(ros::service::call(env_ptr->getHandleNamespace() + "/set_eq_constraint_parameters", srv))
+	    << "Set eq constraint service call failed!";
+	EXPECT_FALSE(srv.response.success);
+}
+
+TEST_F(EqualityEnvFixture, SetEqConstraintInvalidName)
+{
 	EXPECT_TRUE(ros::service::exists(env_ptr->getHandleNamespace() + "/set_eq_constraint_parameters", true))
-	    << "Set eq constraints service should be available!";
+	    << "Set eq constraint service should be available!";
 
-	mujoco_ros_msgs::EqualityConstraintParameters connect_eqc, weld_eqc, joint_eqc, tendon_eqc;
-	connect_eqc.name = "connect_eq";
-	weld_eqc.name    = "weld_eq";
-	joint_eqc.name   = "joint_eq";
-	tendon_eqc.name  = "tendon_eq";
+	mujoco_ros_msgs::EqualityConstraintParameters unknown_eqc;
+	unknown_eqc.name = "unknown_eqc";
+	mujoco_ros_msgs::SetEqualityConstraintParameters srv;
+	srv.request.parameters = { unknown_eqc };
 
+	EXPECT_TRUE(ros::service::call(env_ptr->getHandleNamespace() + "/set_eq_constraint_parameters", srv))
+	    << "Set eq constraint service call failed!";
+	EXPECT_FALSE(srv.response.success);
+}
+
+TEST_F(EqualityEnvFixture, SetEqConstraintConnect)
+{
+	mujoco_ros_msgs::EqualityConstraintParameters connect_eqc;
+	connect_eqc.name  = "connect_eq";
 	int connect_eq_id = mj_name2id(m, mjOBJ_EQUALITY, "connect_eq");
-	int weld_eq_id    = mj_name2id(m, mjOBJ_EQUALITY, "weld_eq");
-	int joint_eq_id   = mj_name2id(m, mjOBJ_EQUALITY, "joint_eq");
-	int tendon_eq_id  = mj_name2id(m, mjOBJ_EQUALITY, "tendon_eq");
 	EXPECT_NE(connect_eq_id, -1) << "connect eq constraint is not defined in loaded model!";
-	EXPECT_NE(weld_eq_id, -1) << "weld eq constraint is not defined in loaded model!";
-	EXPECT_NE(joint_eq_id, -1) << "joint eq constraint is not defined in loaded model!";
-	EXPECT_NE(tendon_eq_id, -1) << "tendon eq constraint is not defined in loaded model!";
-
-	mjtNum quat[4] = { -0.634, -0.002, -0.733, 0.244 };
-	mju_normalize4(quat);
 
 	mujoco_ros_msgs::SetEqualityConstraintParameters srv;
 
@@ -1040,7 +1509,36 @@ TEST_F(EqualityEnvFixture, SetEqConstraint)
 	connect_eqc.solverParameters.width     = 0.001;
 	connect_eqc.solverParameters.midpoint  = 0.5;
 	connect_eqc.solverParameters.power     = 3.0;
+	// constraint specific parameters
+	connect_eqc.element1 = "immovable";
+	connect_eqc.element2 = "";
+	connect_eqc.anchor.x = 5.0;
+	connect_eqc.anchor.y = 3.0;
+	connect_eqc.anchor.z = 7.0;
 
+	// Verify values differ to confirm values have changed later on
+	compare_eqc_values_with_msg_inequal(m, d, connect_eq_id, connect_eqc);
+
+	srv.request.parameters = { connect_eqc };
+
+	EXPECT_TRUE(ros::service::call(env_ptr->getHandleNamespace() + "/set_eq_constraint_parameters", srv))
+	    << "Set eq constraint service call failed!";
+	EXPECT_TRUE(srv.response.success);
+
+	compare_eqc_values_with_msg(m, d, connect_eq_id, connect_eqc);
+}
+
+TEST_F(EqualityEnvFixture, SetEqConstraintWeld)
+{
+	mujoco_ros_msgs::EqualityConstraintParameters weld_eqc;
+	weld_eqc.name  = "weld_eq";
+	int weld_eq_id = mj_name2id(m, mjOBJ_EQUALITY, "weld_eq");
+	EXPECT_NE(weld_eq_id, -1) << "weld eq constraint is not defined in loaded model!";
+
+	mjtNum quat[4] = { -0.634, -0.002, -0.733, 0.244 };
+	mju_normalize4(quat);
+
+	mujoco_ros_msgs::SetEqualityConstraintParameters srv;
 	weld_eqc.active                     = false;
 	weld_eqc.type.value                 = mujoco_ros_msgs::EqualityConstraintType::WELD;
 	weld_eqc.solverParameters.dampratio = 0.8;
@@ -1050,27 +1548,6 @@ TEST_F(EqualityEnvFixture, SetEqConstraint)
 	weld_eqc.solverParameters.width     = 0.001;
 	weld_eqc.solverParameters.midpoint  = 0.5;
 	weld_eqc.solverParameters.power     = 3.0;
-
-	joint_eqc.active                     = false;
-	joint_eqc.type.value                 = mujoco_ros_msgs::EqualityConstraintType::JOINT;
-	joint_eqc.solverParameters.dampratio = 0.8;
-	joint_eqc.solverParameters.timeconst = 0.2;
-	joint_eqc.solverParameters.dmin      = 0.7;
-	joint_eqc.solverParameters.dmax      = 0.9;
-	joint_eqc.solverParameters.width     = 0.001;
-	joint_eqc.solverParameters.midpoint  = 0.5;
-	joint_eqc.solverParameters.power     = 3.0;
-
-	tendon_eqc.active                     = false;
-	tendon_eqc.type.value                 = mujoco_ros_msgs::EqualityConstraintType::TENDON;
-	tendon_eqc.solverParameters.dampratio = 0.8;
-	tendon_eqc.solverParameters.timeconst = 0.2;
-	tendon_eqc.solverParameters.dmin      = 0.7;
-	tendon_eqc.solverParameters.dmax      = 0.9;
-	tendon_eqc.solverParameters.width     = 0.001;
-	tendon_eqc.solverParameters.midpoint  = 0.5;
-	tendon_eqc.solverParameters.power     = 3.0;
-
 	// constraint specific parameters
 	weld_eqc.element1              = "immovable";
 	weld_eqc.element1              = "";
@@ -1085,36 +1562,121 @@ TEST_F(EqualityEnvFixture, SetEqConstraint)
 	weld_eqc.relpose.orientation.y = quat[2];
 	weld_eqc.relpose.orientation.z = quat[3];
 
-	connect_eqc.element1 = "immovable";
-	connect_eqc.element2 = "";
-	connect_eqc.anchor.x = 5.0;
-	connect_eqc.anchor.y = 3.0;
-	connect_eqc.anchor.z = 7.0;
-
-	joint_eqc.element1 = "joint_eq_element1";
-	joint_eqc.element1 = "";
-	joint_eqc.polycoef = std::vector<double>{ 0.1, 1.0, 0.2, 0.3, 0.4 };
-
-	tendon_eqc.element1 = "tendon_eq_element1";
-	tendon_eqc.element1 = "";
-	tendon_eqc.polycoef = std::vector<double>{ 0.1, 1.0, 0.2, 0.3, 0.4 };
-
 	// Verify values differ to confirm values have changed later on
-	compare_eqc_values_with_msg_inequal(m, d, connect_eq_id, connect_eqc);
 	compare_eqc_values_with_msg_inequal(m, d, weld_eq_id, weld_eqc);
-	compare_eqc_values_with_msg_inequal(m, d, joint_eq_id, joint_eqc);
-	compare_eqc_values_with_msg_inequal(m, d, tendon_eq_id, tendon_eqc);
 
-	srv.request.parameters = { connect_eqc, weld_eqc, joint_eqc, tendon_eqc };
+	srv.request.parameters = { weld_eqc };
 
 	EXPECT_TRUE(ros::service::call(env_ptr->getHandleNamespace() + "/set_eq_constraint_parameters", srv))
 	    << "Set eq constraint service call failed!";
 	EXPECT_TRUE(srv.response.success);
 
-	compare_eqc_values_with_msg(m, d, connect_eq_id, connect_eqc);
 	compare_eqc_values_with_msg(m, d, weld_eq_id, weld_eqc);
+}
+
+TEST_F(EqualityEnvFixture, SetEqConstraintJoint)
+{
+	mujoco_ros_msgs::EqualityConstraintParameters joint_eqc;
+	joint_eqc.name  = "joint_eq";
+	int joint_eq_id = mj_name2id(m, mjOBJ_EQUALITY, "joint_eq");
+	EXPECT_NE(joint_eq_id, -1) << "joint eq constraint is not defined in loaded model!";
+
+	mujoco_ros_msgs::SetEqualityConstraintParameters srv;
+	joint_eqc.active                     = false;
+	joint_eqc.type.value                 = mujoco_ros_msgs::EqualityConstraintType::JOINT;
+	joint_eqc.solverParameters.dampratio = 0.8;
+	joint_eqc.solverParameters.timeconst = 0.2;
+	joint_eqc.solverParameters.dmin      = 0.7;
+	joint_eqc.solverParameters.dmax      = 0.9;
+	joint_eqc.solverParameters.width     = 0.001;
+	joint_eqc.solverParameters.midpoint  = 0.5;
+	joint_eqc.solverParameters.power     = 3.0;
+	// constraint specific parameters
+	joint_eqc.element1 = "joint_eq_element1";
+	joint_eqc.element2 = "";
+	joint_eqc.polycoef = std::vector<double>{ 0.1, 1.0, 0.2, 0.3, 0.4 };
+
+	// Verify values differ to confirm values have changed later on
+	compare_eqc_values_with_msg_inequal(m, d, joint_eq_id, joint_eqc);
+
+	srv.request.parameters = { joint_eqc };
+
+	EXPECT_TRUE(ros::service::call(env_ptr->getHandleNamespace() + "/set_eq_constraint_parameters", srv))
+	    << "Set eq constraint service call failed!";
+	EXPECT_TRUE(srv.response.success);
+
 	compare_eqc_values_with_msg(m, d, joint_eq_id, joint_eqc);
+}
+
+TEST_F(EqualityEnvFixture, SetEqConstraintTendon)
+{
+	mujoco_ros_msgs::EqualityConstraintParameters tendon_eqc;
+	tendon_eqc.name  = "tendon_eq";
+	int tendon_eq_id = mj_name2id(m, mjOBJ_EQUALITY, "tendon_eq");
+	EXPECT_NE(tendon_eq_id, -1) << "tendon eq constraint is not defined in loaded model!";
+
+	mujoco_ros_msgs::SetEqualityConstraintParameters srv;
+	tendon_eqc.active                     = false;
+	tendon_eqc.type.value                 = mujoco_ros_msgs::EqualityConstraintType::TENDON;
+	tendon_eqc.solverParameters.dampratio = 0.8;
+	tendon_eqc.solverParameters.timeconst = 0.2;
+	tendon_eqc.solverParameters.dmin      = 0.7;
+	tendon_eqc.solverParameters.dmax      = 0.9;
+	tendon_eqc.solverParameters.width     = 0.001;
+	tendon_eqc.solverParameters.midpoint  = 0.5;
+	tendon_eqc.solverParameters.power     = 3.0;
+	// constraint specific parameters
+	tendon_eqc.element1 = "tendon_eq_element1";
+	tendon_eqc.element2 = "";
+	tendon_eqc.polycoef = std::vector<double>{ 0.1, 1.0, 0.2, 0.3, 0.4 };
+
+	// Verify values differ to confirm values have changed later on
+	compare_eqc_values_with_msg_inequal(m, d, tendon_eq_id, tendon_eqc);
+
+	srv.request.parameters = { tendon_eqc };
+
+	EXPECT_TRUE(ros::service::call(env_ptr->getHandleNamespace() + "/set_eq_constraint_parameters", srv))
+	    << "Set eq constraint service call failed!";
+	EXPECT_TRUE(srv.response.success);
+
 	compare_eqc_values_with_msg(m, d, tendon_eq_id, tendon_eqc);
+}
+
+TEST_F(EqualityEnvFixture, SetEqConstraintPartialSuccess)
+{
+	mujoco_ros_msgs::EqualityConstraintParameters joint_eqc;
+	joint_eqc.name  = "joint_eq";
+	int joint_eq_id = mj_name2id(m, mjOBJ_EQUALITY, "joint_eq");
+	EXPECT_NE(joint_eq_id, -1) << "joint eq constraint is not defined in loaded model!";
+
+	mujoco_ros_msgs::SetEqualityConstraintParameters srv;
+	joint_eqc.active                     = false;
+	joint_eqc.type.value                 = mujoco_ros_msgs::EqualityConstraintType::JOINT;
+	joint_eqc.solverParameters.dampratio = 0.8;
+	joint_eqc.solverParameters.timeconst = 0.2;
+	joint_eqc.solverParameters.dmin      = 0.7;
+	joint_eqc.solverParameters.dmax      = 0.9;
+	joint_eqc.solverParameters.width     = 0.001;
+	joint_eqc.solverParameters.midpoint  = 0.5;
+	joint_eqc.solverParameters.power     = 3.0;
+	// constraint specific parameters
+	joint_eqc.element1 = "joint_eq_element1";
+	joint_eqc.element2 = "";
+	joint_eqc.polycoef = std::vector<double>{ 0.1, 1.0, 0.2, 0.3, 0.4 };
+
+	// Verify values differ to confirm values have changed later on
+	compare_eqc_values_with_msg_inequal(m, d, joint_eq_id, joint_eqc);
+
+	mujoco_ros_msgs::EqualityConstraintParameters unknown_eqc;
+	unknown_eqc.name       = "unknown_eqc";
+	srv.request.parameters = { unknown_eqc, joint_eqc };
+
+	EXPECT_TRUE(ros::service::call(env_ptr->getHandleNamespace() + "/set_eq_constraint_parameters", srv))
+	    << "Set eq constraint service call failed!";
+	EXPECT_FALSE(srv.response.success);
+
+	// Verify joint_eqc was set nonetheless
+	compare_eqc_values_with_msg(m, d, joint_eq_id, joint_eqc);
 }
 
 TEST_F(EqualityEnvFixture, GetEqConstraint)
@@ -1145,3 +1707,141 @@ TEST_F(EqualityEnvFixture, GetEqConstraint)
 	EXPECT_EQ(srv.response.parameters.size(), 4)
 	    << "Expected to find one connect, weld, joint, and tendon constraint each!";
 }
+
+TEST_F(PendulumEnvFixture, SetGravityNotAllowed)
+{
+	mjData *d = env_ptr->getDataPtr();
+
+	EXPECT_FALSE(env_ptr->settings_.run) << "Simulation should be paused!";
+	EXPECT_NEAR(d->time, 0, 1e-6) << "Simulation time should be 0.0!";
+	EXPECT_TRUE(ros::service::exists(env_ptr->getHandleNamespace() + "/set_gravity", true))
+	    << "Set gravity service should be available!";
+
+	// set eval mode and admin hash
+	env_ptr->setEvalMode(true);
+	env_ptr->setAdminHash("right_hash");
+
+	mujoco_ros_msgs::SetGravity srv;
+	srv.request.admin_hash = "wrong_hash";
+
+	EXPECT_TRUE(ros::service::call(env_ptr->getHandleNamespace() + "/set_gravity", srv))
+	    << "Set gravity service call failed!";
+	EXPECT_FALSE(srv.response.success);
+}
+
+TEST_F(PendulumEnvFixture, SetGravity)
+{
+	mjModel *m = env_ptr->getModelPtr();
+	mjData *d  = env_ptr->getDataPtr();
+
+	EXPECT_FALSE(env_ptr->settings_.run) << "Simulation should be paused!";
+	EXPECT_NEAR(d->time, 0, 1e-6) << "Simulation time should be 0.0!";
+	EXPECT_TRUE(ros::service::exists(env_ptr->getHandleNamespace() + "/set_gravity", true))
+	    << "Set gravity service should be available!";
+
+	mujoco_ros_msgs::SetGravity srv;
+	srv.request.gravity = { .0, -10.0, .0 };
+
+	EXPECT_TRUE(ros::service::call(env_ptr->getHandleNamespace() + "/set_gravity", srv))
+	    << "Set gravity service call failed!";
+	EXPECT_TRUE(srv.response.success);
+	EXPECT_DOUBLE_EQ(m->opt.gravity[0], srv.request.gravity[0]) << "Gravity x mismatch";
+	EXPECT_DOUBLE_EQ(m->opt.gravity[1], srv.request.gravity[1]) << "Gravity y mismatch";
+	EXPECT_DOUBLE_EQ(m->opt.gravity[2], srv.request.gravity[2]) << "Gravity z mismatch";
+}
+
+TEST_F(PendulumEnvFixture, GetGravityNotAllowed)
+{
+	mjData *d = env_ptr->getDataPtr();
+
+	EXPECT_FALSE(env_ptr->settings_.run) << "Simulation should be paused!";
+	EXPECT_NEAR(d->time, 0, 1e-6) << "Simulation time should be 0.0!";
+	EXPECT_TRUE(ros::service::exists(env_ptr->getHandleNamespace() + "/get_gravity", true))
+	    << "Get gravity service should be available!";
+
+	// set eval mode and admin hash
+	env_ptr->setEvalMode(true);
+	env_ptr->setAdminHash("right_hash");
+
+	mujoco_ros_msgs::GetGravity srv;
+	srv.request.admin_hash = "wrong_hash";
+
+	EXPECT_TRUE(ros::service::call(env_ptr->getHandleNamespace() + "/get_gravity", srv))
+	    << "Get gravity service call failed!";
+	EXPECT_FALSE(srv.response.success);
+}
+
+TEST_F(PendulumEnvFixture, GetGravity)
+{
+	mjModel *m = env_ptr->getModelPtr();
+	mjData *d  = env_ptr->getDataPtr();
+
+	EXPECT_FALSE(env_ptr->settings_.run) << "Simulation should be paused!";
+	EXPECT_NEAR(d->time, 0, 1e-6) << "Simulation time should be 0.0!";
+	EXPECT_TRUE(ros::service::exists(env_ptr->getHandleNamespace() + "/get_gravity", true))
+	    << "Get gravity service should be available!";
+
+	mujoco_ros_msgs::GetGravity srv;
+
+	EXPECT_TRUE(ros::service::call(env_ptr->getHandleNamespace() + "/get_gravity", srv))
+	    << "Get gravity service call failed!";
+	EXPECT_TRUE(srv.response.success);
+	EXPECT_DOUBLE_EQ(m->opt.gravity[0], srv.response.gravity[0]) << "Gravity x mismatch";
+	EXPECT_DOUBLE_EQ(m->opt.gravity[1], srv.response.gravity[1]) << "Gravity y mismatch";
+	EXPECT_DOUBLE_EQ(m->opt.gravity[2], srv.response.gravity[2]) << "Gravity z mismatch";
+}
+
+TEST_F(PendulumEnvFixture, GetStateUintReady)
+{
+	EXPECT_TRUE(ros::service::exists(env_ptr->getHandleNamespace() + "/get_loading_request_state", true))
+	    << "Get state service should be available!";
+
+	mujoco_ros_msgs::GetStateUint srv;
+
+	EXPECT_TRUE(ros::service::call(env_ptr->getHandleNamespace() + "/get_loading_request_state", srv))
+	    << "Get state service call failed!";
+	EXPECT_EQ(srv.response.state.value, 0) << "State should be ready (0)!";
+}
+
+// Depends to much on speed. Might fail on slow machines
+/*
+TEST_F(PendulumEnvFixture, GetStateUintLoadIssued) {
+   EXPECT_TRUE(ros::service::exists(env_ptr->getHandleNamespace() + "/get_loading_request_state", true))
+       << "Get state service should be available!";
+
+   EXPECT_TRUE(ros::service::exists(env_ptr->getHandleNamespace() + "/reload", true))
+       << "Reload service should be available!";
+
+   mujoco_ros_msgs::GetStateUint srv;
+   mujoco_ros_msgs::Reload r_srv;
+
+   EXPECT_TRUE(ros::service::call(env_ptr->getHandleNamespace() + "/reload", r_srv)) << "Reload service call failed!";
+   while (env_ptr->getOperationalStatus() == 0) { // wait for reload to finish
+      std::this_thread::yield();
+   }
+
+   EXPECT_TRUE(ros::service::call(env_ptr->getHandleNamespace() + "/get_loading_request_state", srv))
+       << "Get state service call failed!";
+   EXPECT_GE(srv.response.state.value, 2) << "State should be load issued (2)!";
+}
+
+TEST_F(PendulumEnvFixture, GetStateUintLoadInProgress) {
+   EXPECT_TRUE(ros::service::exists(env_ptr->getHandleNamespace() + "/get_loading_request_state", true))
+       << "Get state service should be available!";
+
+   EXPECT_TRUE(ros::service::exists(env_ptr->getHandleNamespace() + "/reload", true))
+       << "Reload service should be available!";
+
+   mujoco_ros_msgs::GetStateUint srv;
+   mujoco_ros_msgs::Reload r_srv;
+
+   EXPECT_TRUE(ros::service::call(env_ptr->getHandleNamespace() + "/reload", r_srv)) << "Reload service call failed!";
+   while (env_ptr->getOperationalStatus() != 1) { // wait for reload to finish
+      std::this_thread::yield();
+   }
+
+   EXPECT_TRUE(ros::service::call(env_ptr->getHandleNamespace() + "/get_loading_request_state", srv))
+       << "Get state service call failed!";
+   EXPECT_EQ(srv.response.state.value, 1) << "State should be load issued (1)!";
+}
+*/

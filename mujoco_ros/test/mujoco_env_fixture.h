@@ -52,6 +52,9 @@ public:
 	MujocoEnvMutex *getMutexPtr() { return &physics_thread_mutex_; }
 	int getPendingSteps() { return num_steps_until_exit_; }
 
+	void setEvalMode(bool eval_mode) { settings_.eval_mode = eval_mode; }
+	void setAdminHash(const std::string &hash) { mju::strcpy_arr(settings_.admin_hash, hash.c_str()); }
+
 	std::string getFilename() { return { filename_ }; }
 	int isPhysicsRunning() { return is_physics_running_; }
 	int isEventRunning() { return is_event_running_; }
@@ -145,6 +148,8 @@ class EqualityEnvFixture : public ::testing::Test
 protected:
 	boost::shared_ptr<ros::NodeHandle> nh;
 	MujocoEnvTestWrapper *env_ptr;
+	mjModel *m;
+	mjData *d;
 
 	void SetUp() override
 	{
@@ -179,6 +184,13 @@ protected:
 			seconds += 0.001;
 		}
 		EXPECT_EQ(env_ptr->getFilename(), xml_path) << "Model was not loaded correctly!";
+		m = env_ptr->getModelPtr();
+		d = env_ptr->getDataPtr();
+
+		EXPECT_FALSE(env_ptr->settings_.run) << "Simulation should be paused!";
+		EXPECT_NEAR(d->time, 0, 1e-6) << "Simulation time should be 0.0!";
+		EXPECT_TRUE(ros::service::exists(env_ptr->getHandleNamespace() + "/set_eq_constraint_parameters", true))
+		    << "Set eq constraints service should be available!";
 	}
 
 	void TearDown() override
