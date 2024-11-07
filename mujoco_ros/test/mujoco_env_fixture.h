@@ -49,6 +49,7 @@ public:
 	MujocoEnvTestWrapper(const std::string &admin_hash = std::string()) : MujocoEnv(admin_hash) {}
 	mjModel *getModelPtr() { return model_.get(); }
 	mjData *getDataPtr() { return data_.get(); }
+	MujocoEnvMutex *getMutexPtr() { return &physics_thread_mutex_; }
 	int getPendingSteps() { return num_steps_until_exit_; }
 
 	std::string getFilename() { return { filename_ }; }
@@ -124,6 +125,12 @@ protected:
 			seconds += 0.001;
 		}
 		EXPECT_EQ(env_ptr->getFilename(), xml_path) << "Model was not loaded correctly!";
+
+		// Make sure forward has been run at least once
+		{
+			std::lock_guard<MujocoEnvMutex> lock(*env_ptr->getMutexPtr());
+			mj_forward(env_ptr->getModelPtr(), env_ptr->getDataPtr());
+		}
 	}
 
 	void TearDown() override
