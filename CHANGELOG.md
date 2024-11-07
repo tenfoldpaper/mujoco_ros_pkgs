@@ -16,6 +16,7 @@ Loading and reset times are reported in the server debug log. All plugin stats c
 * When loading takes more than 0.25 seconds the simulation is no longer automatically paused.
 * Fixed fetching of body quaternion in `get_body_state` service.
 * *tests*: PendulumEnvFixture now makes sure `mj_forward` has been run at least once. This ensures the data object is populated with correct initial positions and velocities.
+* re-added services for getting and setting gravity, that somehow vanished.
 
 ### Changed
 * Moved `mujoco_ros::Viewer::Clock` definition to `mujoco_ros::Clock` (into common_types.h).

@@ -84,6 +84,8 @@ void MujocoEnv::setupServices()
 	service_servers_.emplace_back(nh_->advertiseService("get_sim_info", &MujocoEnv::getSimInfoCB, this));
 	service_servers_.emplace_back(nh_->advertiseService("set_rt_factor", &MujocoEnv::setRTFactorCB, this));
 	service_servers_.emplace_back(nh_->advertiseService("get_plugin_stats", &MujocoEnv::getPluginStatsCB, this));
+	service_servers_.emplace_back(nh_->advertiseService("set_gravity", &MujocoEnv::setGravityCB, this));
+	service_servers_.emplace_back(nh_->advertiseService("get_gravity", &MujocoEnv::getGravityCB, this));
 
 	action_step_ = std::make_unique<actionlib::SimpleActionServer<mujoco_ros_msgs::StepAction>>(
 	    *nh_, "step", boost::bind(&MujocoEnv::onStepGoal, this, boost::placeholders::_1), false);
