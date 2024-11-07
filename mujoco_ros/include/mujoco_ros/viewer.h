@@ -111,7 +111,7 @@ public:
 	// Clear the loading message
 	// Can be called instead of Load to clear the message without
 	// requesting the UI load a model
-	void LoadMessageClear(void);
+	void LoadMessageClear();
 
 	// Request that the simulation UI thread renders a new model optionally
 	void Load(mjModelPtr m, mjDataPtr d, const char *displayed_filename);

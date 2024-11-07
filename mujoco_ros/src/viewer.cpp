@@ -2142,7 +2142,7 @@ void Viewer::LoadMessage(const char *displayed_filename)
 	}
 }
 
-void Viewer::LoadMessageClear(void)
+void Viewer::LoadMessageClear()
 {
 	{
 		MutexLock lock(mtx);

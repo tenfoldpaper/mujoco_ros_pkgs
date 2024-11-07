@@ -73,7 +73,7 @@ void readOptionalDoubleFromConfig(const XmlRpc::XmlRpcValue &config, const std::
 
 LaserConfig::LaserConfig(const XmlRpc::XmlRpcValue &config, const std::string &frame_id, const std::string &name,
                          int site_attached)
-    : SensorConfig(std::move(frame_id)), name(name), site_attached(site_attached)
+    : SensorConfig(frame_id), name(name), site_attached(site_attached)
 {
 	if (config.hasMember("visualize")) {
 		this->visualize = static_cast<bool>(config["visualize"]);
@@ -121,8 +121,8 @@ bool LaserPlugin::load(const mjModel *m, mjData *d)
 	if (rosparam_config_["sensors"].getType() == XmlRpc::XmlRpcValue::TypeArray) {
 		// iterate through configs
 		ROS_WARN_NAMED("lasers", "Is array");
-		for (int i = 0; i < rosparam_config_["sensors"].size(); ++i) {
-			initSensor(m, rosparam_config_["sensors"][i]);
+		for (auto &i : rosparam_config_["sensors"]) {
+			initSensor(m, i.second);
 		}
 	} else {
 		ROS_ERROR_NAMED("lasers", "Sensors config is not an array!");
@@ -223,7 +223,7 @@ void processRay(const mjModel *model, mjData *data, std::mt19937 rand_generator,
 	}
 	// add ray to start position
 	mju_addScl3(target, pos, target, dist);
-	mjv_initGeom(geom, mjGEOM_LINE, NULL, NULL, NULL, rgba);
+	mjv_initGeom(geom, mjGEOM_LINE, nullptr, nullptr, nullptr, rgba);
 	mjv_connector(geom, mjGEOM_LINE, 1., pos, target);
 }
 
@@ -243,8 +243,8 @@ void LaserPlugin::computeLasers(const mjModel *model, mjData *data)
 	mjtNum rot[9];
 
 	mjtByte ignore_groups[mjNGROUP] = { 0 };
-	for (int i = 0; i < mjNGROUP; ++i) {
-		ignore_groups[i] = 1;
+	for (unsigned char &ignore_group : ignore_groups) {
+		ignore_group = 1;
 	}
 	ignore_groups[1] = 0; // ignore group 1 (robot geom)
 
@@ -290,8 +290,8 @@ void LaserPlugin::computeLasersMultithreaded(const mjModel *model, mjData *data)
 	mjtNum rot[9];
 
 	mjtByte ignore_groups[mjNGROUP] = { 0 };
-	for (int i = 0; i < mjNGROUP; ++i) {
-		ignore_groups[i] = 1;
+	for (unsigned char &ignore_group : ignore_groups) {
+		ignore_group = 1;
 	}
 	ignore_groups[1] = 0; // ignore group 1 (robot geom)
 
