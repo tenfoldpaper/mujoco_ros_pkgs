@@ -35,10 +35,16 @@ If not, please create a new issue.
     ```sh
     git checkout -b add-featureX
     ```
+    or
+    ```sh
+    git checkout -b fix-bugX
+    ```
+
     * As you code, commit your changes (following conventional commits style, the commit template will help you with that).
     pre-commit will automatically run clang-format and clang-tidy and make sure your commit message conforms with our template.
 
     * Write tests using Google Tests to test your code.
+    In case your contribution is a bugfix, add or improve a test to catch the bug before the fix is applied. This ensures resurfacing of the bug due to later code changes is caught.
 
 5. Propose changes via Pull Requests
 
