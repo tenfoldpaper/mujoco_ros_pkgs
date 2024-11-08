@@ -135,12 +135,15 @@ public:
 	static constexpr double render_ui_rate_lower_bound_ = 0.0333; // Minimum render freq at 30 fps
 	static constexpr float render_ui_rate_upper_bound_  = 0.0166f; // Maximum render freq at 60 fps
 
-	// whether the viewer is operating in passive mode, where it cannot assume
-	// that it has exclusive access to the model, data, and various mjv objects
-	bool is_passive_ = false;
-
 	// Reference to env
 	MujocoEnv *env_;
+
+	std::chrono::time_point<Clock> last_fps_update_;
+	double fps_ = 0;
+
+	// control noise
+	double ctrl_noise_std  = 0.0;
+	double ctrl_noise_rate = 0.0;
 
 	// model and data to be visualized
 	mjModelPtr mnew_;
@@ -150,10 +153,13 @@ public:
 	mjDataPtr d_;
 
 	int ncam_           = 0;
+	int camera          = 0;
 	int nkey_           = 0;
+	int index           = 0;
 	int state_size_     = 0; // number of mjtNums in a history buffer state
 	int nhistory_       = 0; // number of states saved in history buffer
 	int history_cursor_ = 0; // cursor pointing at last saved state
+	int scrub_index     = 0; // index of history-scrubber slider
 
 	std::vector<int> body_parentid_;
 
@@ -178,13 +184,13 @@ public:
 	mjvSceneState scnstate_;
 	mjOption mjopt_prev_;
 	mjvOption opt_prev_;
-	mjvCamera cam_prev_;
-
 	int warn_vgeomfull_prev_;
+	mjvCamera cam_prev_;
 
 	// pending GUI-driven actions, to be applied at the next call to Sync
 	struct
 	{
+		mjuiState select_state;
 		std::optional<std::string> save_xml;
 		std::optional<std::string> save_mjb;
 		std::optional<std::string> print_model;
@@ -193,11 +199,10 @@ public:
 		bool copy_pose;
 		bool load_from_history;
 		bool load_key;
+		int newperturb;
 		bool save_key;
 		bool zero_ctrl;
-		int newperturb;
 		bool select;
-		mjuiState select_state;
 		bool ui_update_simulation;
 		bool ui_update_physics;
 		bool ui_update_rendering;
@@ -211,14 +216,13 @@ public:
 		bool ui_update_speed = false;
 		bool ui_reset        = false;
 		bool ui_reload       = false;
+
 	} pending_ = {};
 
 	ViewerMutex mtx; // Should move to MujocoEnv
 	std::condition_variable_any cond_loadrequest;
 
 	int frames_ = 0;
-	std::chrono::time_point<Clock> last_fps_update_;
-	double fps_ = 0;
 
 	// options
 	int spacing      = 0;
@@ -237,12 +241,6 @@ public:
 
 	// keyframe index
 	int key = 0;
-
-	// index of history-scrubber slider
-	int scrub_index = 0;
-
-	// UI proxy elements for Env settings
-	int run = 0;
 
 	// atomics for cross-thread messages
 	std::atomic_int exit_request        = { 0 };
@@ -271,26 +269,19 @@ public:
 	int real_time_index     = 1;
 	float measured_slowdown = 1.0f;
 
-	// control noise
-	double ctrl_noise_std  = 0.0;
-	double ctrl_noise_rate = 0.0;
-
 	// watch
 	char field[mjMAXUITEXT] = "qpos";
-	int index               = 0;
 
 	// physics: need sync
 	int disable[mjNDISABLE]      = { 0 };
 	int enable[mjNENABLE]        = { 0 };
 	int enableactuator[mjNGROUP] = { 0 };
 
-	// rendering: need sync
-	int camera = 0;
-
 	// visualization
 	mjvScene scn;
 	mjvCamera cam;
 	mjvOption opt;
+	int refresh_rate = 60;
 	mjvPerturb &pert;
 	mjvFigure figconstraint = {};
 	mjvFigure figcost       = {};
@@ -298,12 +289,16 @@ public:
 	mjvFigure figsize       = {};
 	mjvFigure figsensor     = {};
 
+	// pending uploads
+	int texture_upload_ = -1;
+	int mesh_upload_    = -1;
+	int hfield_upload_  = -1;
+	std::condition_variable_any cond_upload_;
+
 	// additional user-defined viszualization geoms
 	mjvScene *user_scn = nullptr;
-	mjtByte user_scn_flags_prev_[mjNRNDFLAG];
 
 	// OpenGL rendering and UI
-	int refresh_rate   = 60;
 	int window_pos[2]  = { 0 };
 	int window_size[2] = { 0 };
 	std::unique_ptr<PlatformUIAdapter> platform_ui;
@@ -355,11 +350,12 @@ public:
 	char info_title[Viewer::kMaxFilenameLength]   = { 0 };
 	char info_content[Viewer::kMaxFilenameLength] = { 0 };
 
-	// pending uploads
-	std::condition_variable_any cond_upload_;
-	int texture_upload_ = -1;
-	int mesh_upload_    = -1;
-	int hfield_upload_  = -1;
+	mjtByte user_scn_flags_prev_[mjNRNDFLAG];
+	// whether the viewer is operating in passive mode, where it cannot assume
+	// that it has exclusive access to the model, data, and various mjv objects
+	bool is_passive_ = false;
+
+	int run = 0;
 };
 
 } // namespace mujoco_ros

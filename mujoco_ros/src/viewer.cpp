@@ -1755,11 +1755,11 @@ namespace mujoco_ros {
 namespace mju = ::mujoco::sample_util;
 
 Viewer::Viewer(std::unique_ptr<PlatformUIAdapter> platform_ui_adapter, MujocoEnv *env, bool is_passive)
-    : is_passive_(is_passive)
-    , env_(env)
+    : env_(env)
     , pert(env->pert_)
     , platform_ui(std::move(platform_ui_adapter))
     , uistate(this->platform_ui->state())
+    , is_passive_(is_passive)
 {
 	mjv_defaultScene(&scn);
 	mjv_defaultSceneState(&scnstate_);
