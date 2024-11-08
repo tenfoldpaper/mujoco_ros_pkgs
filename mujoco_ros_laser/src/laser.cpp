@@ -345,6 +345,7 @@ void LaserPlugin::computeLasersMultithreaded(const mjModel *model, mjData *data)
 			tasks[i].func = processRayThreaded;
 			tasks[i].args = &ray_args[i];
 
+			// NOLINTNEXTLINE(performance-no-int-to-ptr)
 			mju_threadPoolEnqueue(reinterpret_cast<mjThreadPool *>(data->threadpool), &tasks[i]);
 		}
 
