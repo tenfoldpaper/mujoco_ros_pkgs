@@ -49,7 +49,17 @@ int main(int argc, char **argv)
 {
 	testing::InitGoogleTest(&argc, argv);
 	ros::init(argc, argv, "mujoco_ros_plugin_test");
-	return RUN_ALL_TESTS();
+
+	// Create spinner to communicate with ROS
+	ros::AsyncSpinner spinner(1);
+	spinner.start();
+	ros::NodeHandle nh;
+	int ret = RUN_ALL_TESTS();
+
+	// Stop spinner and shutdown ROS before returning
+	spinner.stop();
+	ros::shutdown();
+	return ret;
 }
 
 class LoadedPluginFixture : public ::testing::Test
@@ -145,7 +155,6 @@ TEST_F(BaseEnvFixture, LoadPlugin)
 	EXPECT_EQ(env.getNumCBReadyPlugins(), 1) << "Env should have 1 plugin loaded!";
 
 	env.shutdown();
-	nh->setParam("unpause", true);
 }
 
 TEST_F(LoadedPluginFixture, ResetPlugin)
@@ -221,7 +230,6 @@ TEST_F(BaseEnvFixture, FailedLoad)
 
 	env.shutdown();
 	nh->setParam("should_fail", false);
-	nh->setParam("unpause", true);
 }
 
 TEST_F(BaseEnvFixture, FailedLoadRecoverReload)
@@ -315,5 +323,69 @@ TEST_F(BaseEnvFixture, FailedLoadReset)
 
 	env.shutdown();
 	nh->setParam("should_fail", false);
-	nh->setParam("unpause", true);
+}
+
+TEST_F(LoadedPluginFixture, PluginStats_InitialPaused)
+{
+	EXPECT_EQ(env_ptr->settings_.run, 0) << "Env should be paused!";
+
+	mujoco_ros_msgs::GetPluginStats srv;
+	EXPECT_TRUE(ros::service::exists(env_ptr->getHandleNamespace() + "/get_plugin_stats", true))
+	    << "Plugin stats service should exist!";
+	EXPECT_TRUE(ros::service::call(env_ptr->getHandleNamespace() + "/get_plugin_stats", srv))
+	    << "Get plugin stats service call failed!";
+	EXPECT_EQ(srv.response.stats.size(), 1) << "Should have 1 plugin stats!";
+	EXPECT_EQ(srv.response.stats[0].plugin_type, "mujoco_ros/TestPlugin") << "Should be TestPlugin!";
+	EXPECT_GT(srv.response.stats[0].load_time, -1) << "Load time should be set!";
+	EXPECT_EQ(srv.response.stats[0].reset_time, -1) << "Reset time should be unset!";
+	EXPECT_NEAR(srv.response.stats[0].ema_steptime_control, 0, 1e-8) << "Control time should be unset!";
+	EXPECT_NEAR(srv.response.stats[0].ema_steptime_passive, 0, 1e-8) << "Passive time should be unset!";
+	EXPECT_NEAR(srv.response.stats[0].ema_steptime_render, 0, 1e-8) << "Render time should be unset!";
+	EXPECT_NEAR(srv.response.stats[0].ema_steptime_last_stage, 0, 1e-8) << "Last stage time should be unset!";
+}
+
+TEST_F(LoadedPluginFixture, PluginStats_SetTimesOnStep)
+{
+	EXPECT_EQ(env_ptr->settings_.run, 0) << "Env should be paused!";
+
+	env_ptr->step(1);
+	// sleep for a bit to ensure the plugin callbacks have been called
+	std::this_thread::sleep_for(std::chrono::milliseconds(1));
+
+	mujoco_ros_msgs::GetPluginStats srv;
+	EXPECT_TRUE(ros::service::exists(env_ptr->getHandleNamespace() + "/get_plugin_stats", true))
+	    << "Plugin stats service should exist!";
+	EXPECT_TRUE(ros::service::call(env_ptr->getHandleNamespace() + "/get_plugin_stats", srv))
+	    << "Get plugin stats service call failed!";
+
+	EXPECT_EQ(srv.response.stats.size(), 1) << "Should have 1 plugin stats!";
+	EXPECT_EQ(srv.response.stats[0].plugin_type, "mujoco_ros/TestPlugin") << "Should be TestPlugin!";
+	EXPECT_GT(srv.response.stats[0].load_time, -1) << "Load time should be set!";
+	EXPECT_EQ(srv.response.stats[0].reset_time, -1) << "Reset time should be unset!";
+	EXPECT_GT(srv.response.stats[0].ema_steptime_control, -1) << "Control time should be unset!";
+	EXPECT_GT(srv.response.stats[0].ema_steptime_passive, -1) << "Passive time should be unset!";
+	// EXPECT_GT(srv.response.stats[0].ema_steptime_render, -1) << "Render time should be unset!"; // TODO: add when
+	// rendering is enabled in tests
+	EXPECT_GT(srv.response.stats[0].ema_steptime_last_stage, -1) << "Last stage time should be unset!";
+}
+
+TEST_F(LoadedPluginFixture, PluginStats_ResetTimeOnReset)
+{
+	env_ptr->settings_.reset_request = 1;
+	float seconds                    = 0;
+	while (env_ptr->settings_.reset_request != 0 && seconds < 2) {
+		std::this_thread::sleep_for(std::chrono::milliseconds(1));
+		seconds += 0.001;
+	}
+	EXPECT_LT(seconds, 2) << "Env reset ran into 2 seconds timeout!";
+
+	mujoco_ros_msgs::GetPluginStats srv;
+	EXPECT_TRUE(ros::service::exists(env_ptr->getHandleNamespace() + "/get_plugin_stats", true))
+	    << "Plugin stats service should exist!";
+	EXPECT_TRUE(ros::service::call(env_ptr->getHandleNamespace() + "/get_plugin_stats", srv))
+	    << "Get plugin stats service call failed!";
+
+	EXPECT_EQ(srv.response.stats.size(), 1) << "Should have 1 plugin stats!";
+	EXPECT_EQ(srv.response.stats[0].plugin_type, "mujoco_ros/TestPlugin") << "Should be TestPlugin!";
+	EXPECT_GT(srv.response.stats[0].reset_time, -1) << "Reset time should be unset!";
 }

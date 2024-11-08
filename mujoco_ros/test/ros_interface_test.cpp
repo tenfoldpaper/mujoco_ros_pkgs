@@ -1845,3 +1845,474 @@ TEST_F(PendulumEnvFixture, GetStateUintLoadInProgress) {
    EXPECT_EQ(srv.response.state.value, 1) << "State should be load issued (1)!";
 }
 */
+
+TEST_F(PendulumEnvFixture, LoadInitialJointPositions_Valid)
+{
+	mjModel *m = env_ptr->getModelPtr();
+	mjData *d  = env_ptr->getDataPtr();
+
+	EXPECT_FALSE(env_ptr->settings_.run) << "Simulation should be paused!";
+	EXPECT_NEAR(d->time, 0, 1e-6) << "Simulation time should be 0.0!";
+	EXPECT_TRUE(ros::service::exists(env_ptr->getHandleNamespace() + "/load_initial_joint_states", true))
+	    << "Load initial joint states service should be available!";
+
+	std::map<std::string, std::string> joint_states;
+	joint_states.insert({ "balljoint", "0. 1. 0. 0." });
+	joint_states.insert({ "joint1", "0.3" });
+	joint_states.insert({ "joint2", "0.5" });
+	joint_states.insert({ "ball_freejoint", "1. 0.9 0.8 0.0 0.0 0.0 1.0" });
+
+	// verify initial joint states are different
+	int ids[4];
+	ids[0] = mujoco_ros::util::jointName2id(m, "balljoint");
+	ids[1] = mujoco_ros::util::jointName2id(m, "joint1");
+	ids[2] = mujoco_ros::util::jointName2id(m, "joint2");
+	ids[3] = mujoco_ros::util::jointName2id(m, "ball_freejoint");
+
+	EXPECT_NE(ids[0], -1) << "'balljoint' should be found as joint in model!";
+	EXPECT_NE(ids[1], -1) << "'joint1' should be found as joint in model!";
+	EXPECT_NE(ids[2], -1) << "'joint2' should be found as joint in model!";
+	EXPECT_NE(ids[3], -1) << "'ball_freejoint' should be found as joint in model!";
+
+	compare_qpos(d, m->jnt_qposadr[ids[0]], "balljoint", { 1.0, 0.0, 0.0, 0.0 });
+	compare_qpos(d, m->jnt_qposadr[ids[1]], "joint1", { 0.0 });
+	compare_qpos(d, m->jnt_qposadr[ids[2]], "joint2", { 0.0 });
+	compare_qpos(d, m->jnt_qposadr[ids[3]], "ball_freejoint", { 1.0, 0.0, 0.06, 1.0, 0.0, 0.0, 0.0 });
+
+	nh->setParam(env_ptr->getHandleNamespace() + "/initial_joint_positions/joint_map", joint_states);
+
+	std_srvs::Empty srv;
+
+	EXPECT_TRUE(ros::service::call(env_ptr->getHandleNamespace() + "/load_initial_joint_states", srv))
+	    << "Load initial joint states service call failed!";
+
+	nh->deleteParam(env_ptr->getHandleNamespace() + "/initial_joint_positions/joint_map");
+
+	compare_qpos(d, m->jnt_qposadr[ids[0]], "balljoint", { 0.0, 1.0, 0.0, 0.0 });
+	compare_qpos(d, m->jnt_qposadr[ids[1]], "joint1", { 0.3 });
+	compare_qpos(d, m->jnt_qposadr[ids[2]], "joint2", { 0.5 });
+	compare_qpos(d, m->jnt_qposadr[ids[3]], "ball_freejoint", { 1.0, 0.9, 0.8, 0.0, 0.0, 0.0, 1.0 });
+}
+
+TEST_F(PendulumEnvFixture, LoadInitialJointPositions_NoParams)
+{
+	mjModel *m = env_ptr->getModelPtr();
+	mjData *d  = env_ptr->getDataPtr();
+
+	EXPECT_FALSE(env_ptr->settings_.run) << "Simulation should be paused!";
+	EXPECT_NEAR(d->time, 0, 1e-6) << "Simulation time should be 0.0!";
+	EXPECT_TRUE(ros::service::exists(env_ptr->getHandleNamespace() + "/load_initial_joint_states", true))
+	    << "Load initial joint states service should be available!";
+
+	std_srvs::Empty srv;
+	EXPECT_TRUE(ros::service::call(env_ptr->getHandleNamespace() + "/load_initial_joint_states", srv))
+	    << "Load initial joint states service call failed!";
+
+	int ids[4];
+	ids[0] = mujoco_ros::util::jointName2id(m, "balljoint");
+	ids[1] = mujoco_ros::util::jointName2id(m, "joint1");
+	ids[2] = mujoco_ros::util::jointName2id(m, "joint2");
+	ids[3] = mujoco_ros::util::jointName2id(m, "ball_freejoint");
+
+	EXPECT_NE(ids[0], -1) << "'balljoint' should be found as joint in model!";
+	EXPECT_NE(ids[1], -1) << "'joint1' should be found as joint in model!";
+	EXPECT_NE(ids[2], -1) << "'joint2' should be found as joint in model!";
+	EXPECT_NE(ids[3], -1) << "'ball_freejoint' should be found as joint in model!";
+
+	compare_qpos(d, m->jnt_qposadr[ids[0]], "balljoint", { 1.0, 0.0, 0.0, 0.0 });
+	compare_qpos(d, m->jnt_qposadr[ids[1]], "joint1", { 0.0 });
+	compare_qpos(d, m->jnt_qposadr[ids[2]], "joint2", { 0.0 });
+	compare_qpos(d, m->jnt_qposadr[ids[3]], "ball_freejoint", { 1.0, 0.0, 0.06, 1.0, 0.0, 0.0, 0.0 });
+}
+
+TEST_F(PendulumEnvFixture, LoadInitialJointPositions_InvalidJointName)
+{
+	mjModel *m = env_ptr->getModelPtr();
+	mjData *d  = env_ptr->getDataPtr();
+
+	EXPECT_FALSE(env_ptr->settings_.run) << "Simulation should be paused!";
+	EXPECT_NEAR(d->time, 0, 1e-6) << "Simulation time should be 0.0!";
+	EXPECT_TRUE(ros::service::exists(env_ptr->getHandleNamespace() + "/load_initial_joint_states", true))
+	    << "Load initial joint states service should be available!";
+
+	int ids[4];
+	ids[0] = mujoco_ros::util::jointName2id(m, "balljoint");
+	ids[1] = mujoco_ros::util::jointName2id(m, "joint1");
+	ids[2] = mujoco_ros::util::jointName2id(m, "joint2");
+	ids[3] = mujoco_ros::util::jointName2id(m, "ball_freejoint");
+
+	EXPECT_NE(ids[0], -1) << "'balljoint' should be found as joint in model!";
+	EXPECT_NE(ids[1], -1) << "'joint1' should be found as joint in model!";
+	EXPECT_NE(ids[2], -1) << "'joint2' should be found as joint in model!";
+	EXPECT_NE(ids[3], -1) << "'ball_freejoint' should be found as joint in model!";
+
+	std::map<std::string, std::string> joint_states;
+	joint_states.insert({ "invalid_joint", "0.3" });
+
+	nh->setParam(env_ptr->getHandleNamespace() + "/initial_joint_positions/joint_map", joint_states);
+
+	std_srvs::Empty srv;
+	EXPECT_TRUE(ros::service::call(env_ptr->getHandleNamespace() + "/load_initial_joint_states", srv))
+	    << "Load initial joint states service call failed!";
+	nh->deleteParam(env_ptr->getHandleNamespace() + "/initial_joint_positions/joint_map");
+
+	compare_qpos(d, m->jnt_qposadr[ids[0]], "balljoint", { 1.0, 0.0, 0.0, 0.0 });
+	compare_qpos(d, m->jnt_qposadr[ids[1]], "joint1", { 0.0 });
+	compare_qpos(d, m->jnt_qposadr[ids[2]], "joint2", { 0.0 });
+	compare_qpos(d, m->jnt_qposadr[ids[3]], "ball_freejoint", { 1.0, 0.0, 0.06, 1.0, 0.0, 0.0, 0.0 });
+}
+
+TEST_F(PendulumEnvFixture, LoadInitialJointPositions_InvalidDOFs)
+{
+	mjModel *m = env_ptr->getModelPtr();
+	mjData *d  = env_ptr->getDataPtr();
+
+	EXPECT_FALSE(env_ptr->settings_.run) << "Simulation should be paused!";
+	EXPECT_NEAR(d->time, 0, 1e-6) << "Simulation time should be 0.0!";
+	EXPECT_TRUE(ros::service::exists(env_ptr->getHandleNamespace() + "/load_initial_joint_states", true))
+	    << "Load initial joint states service should be available!";
+
+	int ids[4];
+	ids[0] = mujoco_ros::util::jointName2id(m, "balljoint");
+	ids[1] = mujoco_ros::util::jointName2id(m, "joint1");
+	ids[2] = mujoco_ros::util::jointName2id(m, "joint2");
+	ids[3] = mujoco_ros::util::jointName2id(m, "ball_freejoint");
+
+	EXPECT_NE(ids[0], -1) << "'balljoint' should be found as joint in model!";
+	EXPECT_NE(ids[1], -1) << "'joint1' should be found as joint in model!";
+	EXPECT_NE(ids[2], -1) << "'joint2' should be found as joint in model!";
+	EXPECT_NE(ids[3], -1) << "'ball_freejoint' should be found as joint in model!";
+
+	std::map<std::string, std::string> joint_states;
+	joint_states.insert({ "balljoint", "0. 1. 0." }); // Invalid DOFs for balljoint
+	joint_states.insert({ "joint1", "0.3 0.4" }); // Invalid DOFs for hinge joint
+	joint_states.insert({ "ball_freejoint", "0.6" }); // Invalid DOFs for freejoint
+
+	nh->setParam(env_ptr->getHandleNamespace() + "/initial_joint_positions/joint_map", joint_states);
+
+	std_srvs::Empty srv;
+	EXPECT_TRUE(ros::service::call(env_ptr->getHandleNamespace() + "/load_initial_joint_states", srv))
+	    << "Load initial joint states service call failed!";
+	nh->deleteParam(env_ptr->getHandleNamespace() + "/initial_joint_positions/joint_map");
+
+	compare_qpos(d, m->jnt_qposadr[ids[0]], "balljoint", { 1.0, 0.0, 0.0, 0.0 });
+	compare_qpos(d, m->jnt_qposadr[ids[1]], "joint1", { 0.0 });
+	compare_qpos(d, m->jnt_qposadr[ids[2]], "joint2", { 0.0 });
+	compare_qpos(d, m->jnt_qposadr[ids[3]], "ball_freejoint", { 1.0, 0.0, 0.06, 1.0, 0.0, 0.0, 0.0 });
+}
+
+TEST_F(PendulumEnvFixture, LoadInitialJointVels_Valid)
+{
+	mjModel *m = env_ptr->getModelPtr();
+	mjData *d  = env_ptr->getDataPtr();
+
+	EXPECT_FALSE(env_ptr->settings_.run) << "Simulation should be paused!";
+	EXPECT_NEAR(d->time, 0, 1e-6) << "Simulation time should be 0.0!";
+	EXPECT_TRUE(ros::service::exists(env_ptr->getHandleNamespace() + "/load_initial_joint_states", true))
+	    << "Load initial joint states service should be available!";
+
+	std::map<std::string, std::string> joint_states;
+	joint_states.insert({ "balljoint", "0.2 1. 0.1" });
+	joint_states.insert({ "joint1", "0.3" });
+	joint_states.insert({ "joint2", "0.5" });
+	joint_states.insert({ "ball_freejoint", "1. 0.9 0.8 0.2 0.3 1.0" });
+
+	int ids[4];
+	ids[0] = mujoco_ros::util::jointName2id(m, "balljoint");
+	ids[1] = mujoco_ros::util::jointName2id(m, "joint1");
+	ids[2] = mujoco_ros::util::jointName2id(m, "joint2");
+	ids[3] = mujoco_ros::util::jointName2id(m, "ball_freejoint");
+
+	EXPECT_NE(ids[0], -1) << "'balljoint' should be found as joint in model!";
+	EXPECT_NE(ids[1], -1) << "'joint1' should be found as joint in model!";
+	EXPECT_NE(ids[2], -1) << "'joint2' should be found as joint in model!";
+	EXPECT_NE(ids[3], -1) << "'ball_freejoint' should be found as joint in model!";
+
+	compare_qvel(d, m->jnt_dofadr[ids[0]], "balljoint", { 0.0, 0.0, 0.0 });
+	compare_qvel(d, m->jnt_dofadr[ids[1]], "joint1", { 0.0 });
+	compare_qvel(d, m->jnt_dofadr[ids[2]], "joint2", { 0.0 });
+	compare_qvel(d, m->jnt_dofadr[ids[3]], "ball_freejoint", { 0.0, 0.0, 0.0, 0.0, 0.0, 0.0 });
+
+	nh->setParam(env_ptr->getHandleNamespace() + "/initial_joint_velocities/joint_map", joint_states);
+
+	std_srvs::Empty srv;
+
+	EXPECT_TRUE(ros::service::call(env_ptr->getHandleNamespace() + "/load_initial_joint_states", srv))
+	    << "Load initial joint states service call failed!";
+	nh->deleteParam(env_ptr->getHandleNamespace() + "/initial_joint_velocities/joint_map");
+
+	compare_qvel(d, m->jnt_dofadr[ids[0]], "balljoint", { 0.2, 1.0, 0.1 });
+	compare_qvel(d, m->jnt_dofadr[ids[1]], "joint1", { 0.3 });
+	compare_qvel(d, m->jnt_dofadr[ids[2]], "joint2", { 0.5 });
+	compare_qvel(d, m->jnt_dofadr[ids[3]], "ball_freejoint", { 1.0, 0.9, 0.8, 0.2, 0.3, 1.0 });
+}
+
+TEST_F(PendulumEnvFixture, LoadInitialJointVels_NoParams)
+{
+	mjModel *m = env_ptr->getModelPtr();
+	mjData *d  = env_ptr->getDataPtr();
+
+	EXPECT_FALSE(env_ptr->settings_.run) << "Simulation should be paused!";
+	EXPECT_NEAR(d->time, 0, 1e-6) << "Simulation time should be 0.0!";
+	EXPECT_TRUE(ros::service::exists(env_ptr->getHandleNamespace() + "/load_initial_joint_states", true))
+	    << "Load initial joint states service should be available!";
+
+	std_srvs::Empty srv;
+	EXPECT_TRUE(ros::service::call(env_ptr->getHandleNamespace() + "/load_initial_joint_states", srv))
+	    << "Load initial joint states service call failed!";
+
+	int ids[4];
+	ids[0] = mujoco_ros::util::jointName2id(m, "balljoint");
+	ids[1] = mujoco_ros::util::jointName2id(m, "joint1");
+	ids[2] = mujoco_ros::util::jointName2id(m, "joint2");
+	ids[3] = mujoco_ros::util::jointName2id(m, "ball_freejoint");
+
+	EXPECT_NE(ids[0], -1) << "'balljoint' should be found as joint in model!";
+	EXPECT_NE(ids[1], -1) << "'joint1' should be found as joint in model!";
+	EXPECT_NE(ids[2], -1) << "'joint2' should be found as joint in model!";
+	EXPECT_NE(ids[3], -1) << "'ball_freejoint' should be found as joint in model!";
+
+	compare_qvel(d, m->jnt_dofadr[ids[0]], "balljoint", { 0.0, 0.0, 0.0 });
+	compare_qvel(d, m->jnt_dofadr[ids[1]], "joint1", { 0.0 });
+	compare_qvel(d, m->jnt_dofadr[ids[2]], "joint2", { 0.0 });
+	compare_qvel(d, m->jnt_dofadr[ids[3]], "ball_freejoint", { 0.0, 0.0, 0.0, 0.0, 0.0, 0.0 });
+}
+
+TEST_F(PendulumEnvFixture, LoadInitialJointVels_InvalidJointName)
+{
+	mjModel *m = env_ptr->getModelPtr();
+	mjData *d  = env_ptr->getDataPtr();
+
+	EXPECT_FALSE(env_ptr->settings_.run) << "Simulation should be paused!";
+	EXPECT_NEAR(d->time, 0, 1e-6) << "Simulation time should be 0.0!";
+	EXPECT_TRUE(ros::service::exists(env_ptr->getHandleNamespace() + "/load_initial_joint_states", true))
+	    << "Load initial joint states service should be available!";
+
+	int ids[4];
+	ids[0] = mujoco_ros::util::jointName2id(m, "balljoint");
+	ids[1] = mujoco_ros::util::jointName2id(m, "joint1");
+	ids[2] = mujoco_ros::util::jointName2id(m, "joint2");
+	ids[3] = mujoco_ros::util::jointName2id(m, "ball_freejoint");
+
+	EXPECT_NE(ids[0], -1) << "'balljoint' should be found as joint in model!";
+	EXPECT_NE(ids[1], -1) << "'joint1' should be found as joint in model!";
+	EXPECT_NE(ids[2], -1) << "'joint2' should be found as joint in model!";
+	EXPECT_NE(ids[3], -1) << "'ball_freejoint' should be found as joint in model!";
+
+	std::map<std::string, std::string> joint_states;
+	joint_states.insert({ "invalid_joint", "0.3" });
+
+	nh->setParam(env_ptr->getHandleNamespace() + "/initial_joint_velocities/joint_map", joint_states);
+
+	std_srvs::Empty srv;
+	EXPECT_TRUE(ros::service::call(env_ptr->getHandleNamespace() + "/load_initial_joint_states", srv))
+	    << "Load initial joint states service call failed!";
+	nh->deleteParam(env_ptr->getHandleNamespace() + "/initial_joint_velocities/joint_map");
+
+	compare_qvel(d, m->jnt_dofadr[ids[0]], "balljoint", { 0.0, 0.0, 0.0 });
+	compare_qvel(d, m->jnt_dofadr[ids[1]], "joint1", { 0.0 });
+	compare_qvel(d, m->jnt_dofadr[ids[2]], "joint2", { 0.0 });
+	compare_qvel(d, m->jnt_dofadr[ids[3]], "ball_freejoint", { 0.0, 0.0, 0.0, 0.0, 0.0, 0.0 });
+}
+
+TEST_F(PendulumEnvFixture, LoadInitialJointVels_InvalidDOFs)
+{
+	mjModel *m = env_ptr->getModelPtr();
+	mjData *d  = env_ptr->getDataPtr();
+
+	EXPECT_FALSE(env_ptr->settings_.run) << "Simulation should be paused!";
+	EXPECT_NEAR(d->time, 0, 1e-6) << "Simulation time should be 0.0!";
+	EXPECT_TRUE(ros::service::exists(env_ptr->getHandleNamespace() + "/load_initial_joint_states", true))
+	    << "Load initial joint states service should be available!";
+
+	int ids[4];
+	ids[0] = mujoco_ros::util::jointName2id(m, "balljoint");
+	ids[1] = mujoco_ros::util::jointName2id(m, "joint1");
+	ids[2] = mujoco_ros::util::jointName2id(m, "joint2");
+	ids[3] = mujoco_ros::util::jointName2id(m, "ball_freejoint");
+
+	EXPECT_NE(ids[0], -1) << "'balljoint' should be found as joint in model!";
+	EXPECT_NE(ids[1], -1) << "'joint1' should be found as joint in model!";
+	EXPECT_NE(ids[2], -1) << "'joint2' should be found as joint in model!";
+	EXPECT_NE(ids[3], -1) << "'ball_freejoint' should be found as joint in model!";
+
+	std::map<std::string, std::string> joint_states;
+	joint_states.insert({ "balljoint", "0. 1." }); // Invalid DOFs for balljoint
+	joint_states.insert({ "joint1", "0.3 0.4" }); // Invalid DOFs for hinge joint
+	joint_states.insert({ "ball_freejoint", "0.6" }); // Invalid DOFs for freejoint
+
+	nh->setParam(env_ptr->getHandleNamespace() + "/initial_joint_velocities/joint_map", joint_states);
+
+	std_srvs::Empty srv;
+	EXPECT_TRUE(ros::service::call(env_ptr->getHandleNamespace() + "/load_initial_joint_states", srv))
+	    << "Load initial joint states service call failed!";
+	nh->deleteParam(env_ptr->getHandleNamespace() + "/initial_joint_velocities/joint_map");
+
+	compare_qvel(d, m->jnt_dofadr[ids[0]], "balljoint", { 0.0, 0.0, 0.0 });
+	compare_qvel(d, m->jnt_dofadr[ids[1]], "joint1", { 0.0 });
+	compare_qvel(d, m->jnt_dofadr[ids[2]], "joint2", { 0.0 });
+	compare_qvel(d, m->jnt_dofadr[ids[3]], "ball_freejoint", { 0.0, 0.0, 0.0, 0.0, 0.0, 0.0 });
+}
+
+TEST_F(PendulumEnvFixture, SetRTFactor_NotAllowed)
+{
+	// Set eval mode and admin hash
+	env_ptr->setEvalMode(true);
+	env_ptr->setAdminHash("right_hash");
+
+	int initial_rt_index = env_ptr->settings_.real_time_index;
+
+	mujoco_ros_msgs::SetFloat srv;
+	srv.request.value      = 1.5; // Increase real-time factor
+	srv.request.admin_hash = "wrong_hash";
+
+	EXPECT_TRUE(ros::service::exists(env_ptr->getHandleNamespace() + "/set_rt_factor", true))
+	    << "Set RT factor service call failed!";
+
+	EXPECT_TRUE(ros::service::call(env_ptr->getHandleNamespace() + "/set_rt_factor", srv))
+	    << "Set RT factor service call failed!";
+	EXPECT_FALSE(srv.response.success) << "Service call should not be successful!";
+
+	EXPECT_EQ(env_ptr->settings_.real_time_index, initial_rt_index) << "Real-time factor should not have changed!";
+}
+
+TEST_F(PendulumEnvFixture, SetRTFactor_Increase)
+{
+	mujoco_ros_msgs::SetFloat srv;
+	srv.request.value = 1.5; // Increase real-time factor
+	EXPECT_TRUE(ros::service::exists(env_ptr->getHandleNamespace() + "/set_rt_factor", true))
+	    << "Set RT factor service call failed!";
+
+	EXPECT_TRUE(ros::service::call(env_ptr->getHandleNamespace() + "/set_rt_factor", srv))
+	    << "Set RT factor service call failed!";
+	EXPECT_TRUE(srv.response.success) << "Service call was not successful!";
+
+	EXPECT_FLOAT_EQ(env_ptr->percentRealTime[env_ptr->settings_.real_time_index], 150.f)
+	    << "Real-time factor should be set to 1.5!";
+}
+
+TEST_F(PendulumEnvFixture, SetRTFactor_Decrease)
+{
+	mujoco_ros_msgs::SetFloat srv;
+	srv.request.value = 0.5; // Decrease real-time factor
+
+	EXPECT_TRUE(ros::service::exists(env_ptr->getHandleNamespace() + "/set_rt_factor", true))
+	    << "Set RT factor service call failed!";
+	EXPECT_TRUE(ros::service::call(env_ptr->getHandleNamespace() + "/set_rt_factor", srv))
+	    << "Set RT factor service call failed!";
+	EXPECT_TRUE(srv.response.success) << "Service call was not successful!";
+	EXPECT_FLOAT_EQ(env_ptr->percentRealTime[env_ptr->settings_.real_time_index], 50.f)
+	    << "Real-time factor should be set to 0.5!";
+}
+
+TEST_F(PendulumEnvFixture, SetRTFactor_UnboundMode)
+{
+	mujoco_ros_msgs::SetFloat srv;
+	srv.request.value = -1; // Set to unbound mode
+
+	EXPECT_TRUE(ros::service::exists(env_ptr->getHandleNamespace() + "/set_rt_factor", true))
+	    << "Set RT factor service call failed!";
+	EXPECT_TRUE(ros::service::call(env_ptr->getHandleNamespace() + "/set_rt_factor", srv))
+	    << "Set RT factor service call failed!";
+	EXPECT_TRUE(srv.response.success) << "Service call was not successful!";
+	EXPECT_EQ(env_ptr->settings_.real_time_index, 0) << "Real-time factor should be set to unbound mode!";
+}
+
+TEST_F(PendulumEnvFixture, SetRTFactor_OutOfBounds)
+{
+	mujoco_ros_msgs::SetFloat srv;
+	srv.request.value = 1000; // Set to a value outside the boundaries
+
+	EXPECT_TRUE(ros::service::call(env_ptr->getHandleNamespace() + "/set_rt_factor", srv))
+	    << "Set RT factor service call failed!";
+	EXPECT_TRUE(srv.response.success) << "Service call was not successful!";
+	EXPECT_FLOAT_EQ(env_ptr->percentRealTime[env_ptr->settings_.real_time_index], 2000.0f)
+	    << "Real-time factor should be clipped to the maximum boundary value!";
+}
+
+TEST_F(PendulumEnvFixture, SetRTFactor_RoundUpClosest)
+{
+	mujoco_ros_msgs::SetFloat srv;
+	srv.request.value = 0.45; // Set to a value outside the boundaries
+
+	EXPECT_TRUE(ros::service::call(env_ptr->getHandleNamespace() + "/set_rt_factor", srv))
+	    << "Set RT factor service call failed!";
+	EXPECT_TRUE(srv.response.success) << "Service call was not successful!";
+	EXPECT_FLOAT_EQ(env_ptr->percentRealTime[env_ptr->settings_.real_time_index], 50.0f)
+	    << "Real-time factor should be clipped to the maximum boundary value!";
+}
+
+TEST_F(PendulumEnvFixture, SetRTFactor_RoundDownClosest)
+{
+	mujoco_ros_msgs::SetFloat srv;
+	srv.request.value = 0.44; // Set to a value outside the boundaries
+
+	EXPECT_TRUE(ros::service::call(env_ptr->getHandleNamespace() + "/set_rt_factor", srv))
+	    << "Set RT factor service call failed!";
+	EXPECT_TRUE(srv.response.success) << "Service call was not successful!";
+	EXPECT_FLOAT_EQ(env_ptr->percentRealTime[env_ptr->settings_.real_time_index], 40.0f)
+	    << "Real-time factor should be clipped to the maximum boundary value!";
+}
+
+TEST_F(PendulumEnvFixture, GetSimInfo_ModelPath)
+{
+	mujoco_ros_msgs::GetSimInfo srv;
+
+	EXPECT_TRUE(ros::service::call(env_ptr->getHandleNamespace() + "/get_sim_info", srv))
+	    << "Get sim info service call failed!";
+	EXPECT_TRUE(srv.response.state.model_path.find("pendulum_world.xml") != std::string::npos)
+	    << "Model path should contain 'pendulum_world.xml'!";
+	EXPECT_TRUE(srv.response.state.model_valid) << "Model should be valid!";
+}
+
+TEST_F(PendulumEnvFixture, GetSimInfo_LoadCountIncreases)
+{
+	mujoco_ros_msgs::Reload reload_srv;
+	mujoco_ros_msgs::GetSimInfo sim_info_srv;
+
+	EXPECT_TRUE(ros::service::call(env_ptr->getHandleNamespace() + "/get_sim_info", sim_info_srv))
+	    << "Get sim info service call failed!";
+	int initial_load_count = sim_info_srv.response.state.load_count;
+
+	EXPECT_TRUE(ros::service::call(env_ptr->getHandleNamespace() + "/reload", reload_srv))
+	    << "Reload service call failed!";
+	EXPECT_TRUE(ros::service::call(env_ptr->getHandleNamespace() + "/get_sim_info", sim_info_srv))
+	    << "Get sim info service call failed!";
+	EXPECT_GT(sim_info_srv.response.state.load_count, initial_load_count) << "Load count should increase after reload!";
+}
+
+TEST_F(PendulumEnvFixture, GetSimInfo_PauseStateChanges)
+{
+	mujoco_ros_msgs::SetPause pause_srv;
+	mujoco_ros_msgs::GetSimInfo sim_info_srv;
+
+	pause_srv.request.paused = true;
+	EXPECT_TRUE(ros::service::call(env_ptr->getHandleNamespace() + "/set_pause", pause_srv))
+	    << "Set pause service call failed!";
+	EXPECT_TRUE(ros::service::call(env_ptr->getHandleNamespace() + "/get_sim_info", sim_info_srv))
+	    << "Get sim info service call failed!";
+	EXPECT_TRUE(sim_info_srv.response.state.paused) << "Simulation should be paused!";
+
+	pause_srv.request.paused = false;
+	EXPECT_TRUE(ros::service::call(env_ptr->getHandleNamespace() + "/set_pause", pause_srv))
+	    << "Set pause service call failed!";
+	EXPECT_TRUE(ros::service::call(env_ptr->getHandleNamespace() + "/get_sim_info", sim_info_srv))
+	    << "Get sim info service call failed!";
+	EXPECT_FALSE(sim_info_srv.response.state.paused) << "Simulation should be unpaused!";
+}
+
+TEST_F(PendulumEnvFixture, GetSimInfo_RTSettingChanges)
+{
+	mujoco_ros_msgs::SetFloat rt_factor_srv;
+	rt_factor_srv.request.value = 1.5; // Change real-time factor
+
+	EXPECT_TRUE(ros::service::call(env_ptr->getHandleNamespace() + "/set_rt_factor", rt_factor_srv))
+	    << "Set RT factor service call failed!";
+	EXPECT_TRUE(rt_factor_srv.response.success) << "Service call was not successful!";
+
+	mujoco_ros_msgs::GetSimInfo sim_info_srv;
+	EXPECT_TRUE(ros::service::call(env_ptr->getHandleNamespace() + "/get_sim_info", sim_info_srv))
+	    << "Get sim info service call failed!";
+	EXPECT_FLOAT_EQ(sim_info_srv.response.state.rt_setting, 1.5f)
+	    << "RT setting should change when RT factor is changed!";
+}
