@@ -113,8 +113,10 @@ bool registerPlugin(const std::string &nh_namespace, const XmlRpc::XmlRpcValue &
 
 void initPluginLoader()
 {
+	// NOLINTBEGIN(clang-analyzer-optin.cplusplus.VirtualCall)
 	plugin_loader_ptr_ =
 	    std::make_unique<pluginlib::ClassLoader<mujoco_ros::MujocoPlugin>>("mujoco_ros", "mujoco_ros::MujocoPlugin");
+	// NOLINTEND(clang-analyzer-optin.cplusplus.VirtualCall)
 }
 
 void unloadPluginloader()

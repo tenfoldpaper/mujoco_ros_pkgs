@@ -45,18 +45,19 @@
 #include <chrono>
 #include <thread>
 
+// clang-tidy complains about ROS_LOG in the pluginlib macros
+// NOLINTBEGIN(clang-analyzer-optin.cplusplus.VirtualCall)
 namespace mujoco_ros::control {
 
 MujocoRosControlPlugin::~MujocoRosControlPlugin() = default;
 
 bool MujocoRosControlPlugin::load(const mjModel *m, mjData *d)
 {
-	ROS_INFO_STREAM_NAMED("mujoco_ros_control", "Loading mujoco_ros_control plugin ...");
+	ROS_INFO_NAMED("mujoco_ros_control", "Loading mujoco_ros_control plugin ...");
 
 	// Check that ROS has been initialized
 	if (!ros::isInitialized()) {
-		ROS_FATAL_STREAM_NAMED("mujoco_ros_control",
-		                       "A ROS node for Mujoco has not been initialized, unable to load plugin.");
+		ROS_FATAL_NAMED("mujoco_ros_control", "A ROS node for Mujoco has not been initialized, unable to load plugin.");
 		return false;
 	}
 
@@ -238,3 +239,5 @@ void MujocoRosControlPlugin::eStopCB(const std_msgs::BoolConstPtr &e_stop_active
 } // namespace mujoco_ros::control
 
 PLUGINLIB_EXPORT_CLASS(mujoco_ros::control::MujocoRosControlPlugin, mujoco_ros::MujocoPlugin)
+
+// NOLINTEND(clang-analyzer-optin.cplusplus.VirtualCall)
