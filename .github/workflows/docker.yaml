@@ -6,6 +6,8 @@ on:
     - cron: "0 6 * * 6"
   workflow_dispatch:
   push:
+    branches:
+      - noetic-devel
     paths:
       - '**/package.xml'
       - .docker
