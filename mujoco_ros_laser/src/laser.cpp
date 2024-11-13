@@ -120,9 +120,9 @@ bool LaserPlugin::load(const mjModel *m, mjData *d)
 
 	if (rosparam_config_["sensors"].getType() == XmlRpc::XmlRpcValue::TypeArray) {
 		// iterate through configs
-		ROS_WARN_NAMED("lasers", "Is array");
-		for (auto &i : rosparam_config_["sensors"]) {
-			initSensor(m, i.second);
+		// NOLINTNEXTLINE(modernize-loop-convert) range-based for loop throws XmlRpcValue Exception
+		for (uint i = 0; i < rosparam_config_["sensors"].size(); i++) {
+			initSensor(m, rosparam_config_["sensors"][i]);
 		}
 	} else {
 		ROS_ERROR_NAMED("lasers", "Sensors config is not an array!");

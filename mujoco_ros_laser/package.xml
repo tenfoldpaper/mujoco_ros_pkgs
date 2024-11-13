@@ -17,6 +17,8 @@
   <depend>mujoco_ros_sensors</depend>
   <depend>sensor_msgs</depend>
 
+  <test_depend>rostest</test_depend>
+
   <export>
     <mujoco_ros plugin="${prefix}/mujoco_laser_plugin.xml" />
   </export>
