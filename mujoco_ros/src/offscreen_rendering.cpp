@@ -86,10 +86,9 @@ OffscreenRenderContext::~OffscreenRenderContext()
 
 void MujocoEnv::initializeRenderResources()
 {
-	image_transport::ImageTransport it(*nh_);
 	bool config_exists, use_segid;
 	rendering::streamType stream_type;
-	std::string cam_name, cam_config_path;
+	std::string cam_name, cam_config_path, base_topic, rgb, depth, segment;
 	float pub_freq;
 	int max_res_h = 0, max_res_w = 0;
 
@@ -124,19 +123,31 @@ void MujocoEnv::initializeRenderResources()
 		res_w_string += "/width";
 		std::string res_h_string(param_path);
 		res_h_string += "/height";
+		std::string base_topic_string(param_path);
+		base_topic_string += "/topic";
+		std::string rgb_topic_string(param_path);
+		rgb_topic_string += "/name_rgb";
+		std::string depth_topic_string(param_path);
+		depth_topic_string += "/name_depth";
+		std::string segment_topic_string(param_path);
+		segment_topic_string += "/name_segment";
 
 		stream_type = rendering::streamType(this->nh_->param<int>(stream_type_string, rendering::streamType::RGB));
 		pub_freq    = this->nh_->param<float>(pub_freq_string, 15);
 		use_segid   = this->nh_->param<bool>(segid_string, true);
 		res_w       = this->nh_->param<int>(res_w_string, 720);
 		res_h       = this->nh_->param<int>(res_h_string, 480);
+		base_topic  = this->nh_->param<std::string>(base_topic_string, "cameras/" + cam_name);
+		rgb         = this->nh_->param<std::string>(rgb_topic_string, "rgb");
+		depth       = this->nh_->param<std::string>(depth_topic_string, "depth");
+		segment     = this->nh_->param<std::string>(segment_topic_string, "segmented");
 
 		max_res_h = std::max(res_h, max_res_h);
 		max_res_w = std::max(res_w, max_res_w);
 
-		offscreen_.cams.emplace_back(std::make_unique<rendering::OffscreenCamera>(cam_id, cam_name, res_w, res_h,
-		                                                                          stream_type, use_segid, pub_freq, &it,
-		                                                                          *nh_, model_.get(), data_.get(), this));
+		offscreen_.cams.emplace_back(std::make_unique<rendering::OffscreenCamera>(
+		    cam_id, base_topic, rgb, depth, segment, cam_name, res_w, res_h, stream_type, use_segid, pub_freq, *nh_,
+		    model_.get(), data_.get(), this));
 	}
 
 	if (model_->vis.global.offheight < max_res_h || model_->vis.global.offwidth < max_res_w) {
