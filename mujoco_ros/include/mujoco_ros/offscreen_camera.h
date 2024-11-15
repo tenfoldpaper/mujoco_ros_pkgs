@@ -53,10 +53,11 @@ namespace mujoco_ros::rendering {
 class OffscreenCamera
 {
 public:
-	OffscreenCamera(const uint8_t cam_id, const std::string &cam_name, const int width, const int height,
-	                const streamType stream_type, const bool use_segid, const float pub_freq,
-	                image_transport::ImageTransport *it, const ros::NodeHandle &parent_nh, const mjModel *model,
-	                mjData *data, mujoco_ros::MujocoEnv *env_ptr);
+	OffscreenCamera(const uint8_t cam_id, const std::string &base_topic, const std::string &rgb_topic,
+	                const std::string &depth_topic, const std::string &segment_topic, const std::string &cam_name,
+	                const int width, const int height, const streamType stream_type, const bool use_segid,
+	                const float pub_freq, const ros::NodeHandle &parent_nh, const mjModel *model, mjData *data,
+	                mujoco_ros::MujocoEnv *env_ptr);
 
 	~OffscreenCamera()
 	{
@@ -66,11 +67,14 @@ public:
 		rgb_pub_.shutdown();
 		depth_pub_.shutdown();
 		segment_pub_.shutdown();
-		camera_info_pub_.shutdown();
+		rgb_camera_info_pub_.shutdown();
+		depth_camera_info_pub_.shutdown();
+		segment_camera_info_pub_.shutdown();
 	};
 
 	uint8_t cam_id_;
 	std::string cam_name_;
+	std::string topic_;
 	int width_, height_;
 	streamType stream_type_ = streamType::RGB;
 	bool use_segid_         = true;
@@ -82,10 +86,14 @@ public:
 	mjvSceneState scn_state_; // Update depends on vopt, so every CamStream needs one
 
 	ros::Time last_pub_;
-	ros::Publisher camera_info_pub_;
+	ros::NodeHandle nh_;
+	image_transport::ImageTransport it_;
 	image_transport::Publisher rgb_pub_;
+	ros::Publisher rgb_camera_info_pub_;
 	image_transport::Publisher depth_pub_;
+	ros::Publisher depth_camera_info_pub_;
 	image_transport::Publisher segment_pub_;
+	ros::Publisher segment_camera_info_pub_;
 
 	void renderAndPublish(mujoco_ros::OffscreenRenderContext *offscreen);
 
@@ -97,8 +105,6 @@ public:
 
 private:
 	std::unique_ptr<camera_info_manager::CameraInfoManager> camera_info_manager_;
-
-	void publishCameraInfo();
 
 	bool renderAndPubIfNecessary(mujoco_ros::OffscreenRenderContext *offscreen, const bool rgb, const bool depth,
 	                             const bool segment);
