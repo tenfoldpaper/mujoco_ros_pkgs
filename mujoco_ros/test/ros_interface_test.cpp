@@ -51,6 +51,8 @@
 
 #include "mujoco_env_fixture.h"
 
+#include <mujoco_ros/SimParamsConfig.h>
+
 #include <mujoco_ros/mujoco_env.h>
 #include <mujoco_ros/util.h>
 #include <ros/ros.h>
@@ -2315,4 +2317,405 @@ TEST_F(PendulumEnvFixture, GetSimInfo_RTSettingChanges)
 	    << "Get sim info service call failed!";
 	EXPECT_FLOAT_EQ(sim_info_srv.response.state.rt_setting, 1.5f)
 	    << "RT setting should change when RT factor is changed!";
+}
+
+TEST_F(BaseEnvFixture, DynParamEnumsMatchMJEnums)
+{
+	// Integrators
+	ASSERT_EQ(mujoco_ros::SimParams_Euler, mjINT_EULER);
+	ASSERT_EQ(mujoco_ros::SimParams_RK4, mjINT_RK4);
+	ASSERT_EQ(mujoco_ros::SimParams_Implicit, mjINT_IMPLICIT);
+	ASSERT_EQ(mujoco_ros::SimParams_Implicitfast, mjINT_IMPLICITFAST);
+
+	// Cones
+	ASSERT_EQ(mujoco_ros::SimParams_Elliptic, mjCONE_ELLIPTIC);
+	ASSERT_EQ(mujoco_ros::SimParams_Pyramidal, mjCONE_PYRAMIDAL);
+
+	// Jacobians
+	ASSERT_EQ(mujoco_ros::SimParams_Dense, mjJAC_DENSE);
+	ASSERT_EQ(mujoco_ros::SimParams_Sparse, mjJAC_SPARSE);
+	ASSERT_EQ(mujoco_ros::SimParams_Auto, mjJAC_AUTO);
+
+	// Solvers
+	ASSERT_EQ(mujoco_ros::SimParams_PGS, mjSOL_PGS);
+	ASSERT_EQ(mujoco_ros::SimParams_CG, mjSOL_CG);
+	ASSERT_EQ(mujoco_ros::SimParams_Newton, mjSOL_NEWTON);
+}
+
+TEST_F(PendulumEnvFixture, DynamicReconfigureServiceExists)
+{
+	EXPECT_NE(env_ptr->getParamServer(), nullptr) << "Parameter server should be initialized!";
+	EXPECT_TRUE(ros::service::waitForService(env_ptr->getHandleNamespace() + "/set_parameters", 1000))
+	    << "Service should be available!";
+}
+
+TEST_F(PendulumEnvFixture, DynamicReconfigureSingleParam)
+{
+	// Test dynamic reconfigure
+	dynamic_reconfigure::ReconfigureRequest req;
+	dynamic_reconfigure::ReconfigureResponse res;
+	dynamic_reconfigure::DoubleParameter param;
+	dynamic_reconfigure::Config conf;
+
+	param.name  = "timestep";
+	param.value = 0.002;
+	conf.doubles.emplace_back(param);
+	req.config = conf;
+
+	EXPECT_TRUE(ros::service::call(env_ptr->getHandleNamespace() + "/set_parameters", req, res))
+	    << "Service call should not fail!";
+	EXPECT_DOUBLE_EQ(env_ptr->getModelPtr()->opt.timestep, 0.002) << "Timestep should have been updated!";
+}
+
+TEST_F(PendulumEnvFixture, DynamicReconfigureAllParams)
+{
+	// Test dynamic reconfigure with all parameters
+	dynamic_reconfigure::ReconfigureRequest req;
+	dynamic_reconfigure::ReconfigureResponse res;
+	dynamic_reconfigure::StrParameter string_param;
+	dynamic_reconfigure::DoubleParameter double_param;
+	dynamic_reconfigure::IntParameter int_param;
+	dynamic_reconfigure::BoolParameter bool_param;
+	dynamic_reconfigure::Config conf;
+
+	string_param.name  = "admin_hash";
+	string_param.value = "new_hash";
+	conf.strs.emplace_back(string_param);
+
+	// Physics
+	int_param.name  = "integrator";
+	int_param.value = 2;
+	conf.ints.emplace_back(int_param);
+
+	int_param.name  = "cone";
+	int_param.value = 0;
+	conf.ints.emplace_back(int_param);
+
+	int_param.name  = "jacobian";
+	int_param.value = 1;
+	conf.ints.emplace_back(int_param);
+
+	int_param.name  = "solver";
+	int_param.value = 1;
+	conf.ints.emplace_back(int_param);
+
+	// alg_params
+	double_param.name  = "timestep";
+	double_param.value = 0.002;
+	conf.doubles.emplace_back(double_param);
+
+	int_param.name  = "iterations";
+	int_param.value = 200;
+	conf.ints.emplace_back(int_param);
+
+	double_param.name  = "tolerance";
+	double_param.value = 1e-7;
+	conf.doubles.emplace_back(double_param);
+
+	int_param.name  = "ls_iter";
+	int_param.value = 60;
+	conf.ints.emplace_back(int_param);
+
+	double_param.name  = "ls_tol";
+	double_param.value = 0.02;
+	conf.doubles.emplace_back(double_param);
+
+	int_param.name  = "noslip_iter";
+	int_param.value = 10;
+	conf.ints.emplace_back(int_param);
+
+	double_param.name  = "noslip_tol";
+	double_param.value = 1e-5;
+	conf.doubles.emplace_back(double_param);
+
+	int_param.name  = "mpr_iter";
+	int_param.value = 60;
+	conf.ints.emplace_back(int_param);
+
+	double_param.name  = "mpr_tol";
+	double_param.value = 1e-5;
+	conf.doubles.emplace_back(double_param);
+
+	int_param.name  = "sdf_iter";
+	int_param.value = 15;
+	conf.ints.emplace_back(int_param);
+
+	int_param.name  = "sdf_init";
+	int_param.value = 50;
+	conf.ints.emplace_back(int_param);
+
+	// phy_params
+	string_param.name  = "gravity";
+	string_param.value = "9.81 1 2";
+	conf.strs.emplace_back(string_param);
+
+	string_param.name  = "wind";
+	string_param.value = "1 1 1";
+	conf.strs.emplace_back(string_param);
+
+	string_param.name  = "magnetic";
+	string_param.value = "0.1 0.1 0.1";
+	conf.strs.emplace_back(string_param);
+
+	double_param.name  = "density";
+	double_param.value = 1.2;
+	conf.doubles.emplace_back(double_param);
+
+	double_param.name  = "viscosity";
+	double_param.value = 0.00003;
+	conf.doubles.emplace_back(double_param);
+
+	double_param.name  = "impratio";
+	double_param.value = 1.5;
+	conf.doubles.emplace_back(double_param);
+
+	// disable flags
+	bool_param.name  = "constraint_disabled";
+	bool_param.value = true;
+	conf.bools.emplace_back(bool_param);
+
+	bool_param.name  = "equality_disabled";
+	bool_param.value = true;
+	conf.bools.emplace_back(bool_param);
+
+	bool_param.name  = "frictionloss_disabled";
+	bool_param.value = true;
+	conf.bools.emplace_back(bool_param);
+
+	bool_param.name  = "limit_disabled";
+	bool_param.value = true;
+	conf.bools.emplace_back(bool_param);
+
+	bool_param.name  = "contact_disabled";
+	bool_param.value = true;
+	conf.bools.emplace_back(bool_param);
+
+	bool_param.name  = "passive_disabled";
+	bool_param.value = true;
+	conf.bools.emplace_back(bool_param);
+
+	bool_param.name  = "gravity_disabled";
+	bool_param.value = true;
+	conf.bools.emplace_back(bool_param);
+
+	bool_param.name  = "clampctrl_disabled";
+	bool_param.value = true;
+	conf.bools.emplace_back(bool_param);
+
+	bool_param.name  = "warmstart_disabled";
+	bool_param.value = true;
+	conf.bools.emplace_back(bool_param);
+
+	bool_param.name  = "filterparent_disabled";
+	bool_param.value = true;
+	conf.bools.emplace_back(bool_param);
+
+	bool_param.name  = "actuation_disabled";
+	bool_param.value = true;
+	conf.bools.emplace_back(bool_param);
+
+	bool_param.name  = "refsafe_disabled";
+	bool_param.value = true;
+	conf.bools.emplace_back(bool_param);
+
+	bool_param.name  = "sensor_disabled";
+	bool_param.value = true;
+	conf.bools.emplace_back(bool_param);
+
+	bool_param.name  = "midphase_disabled";
+	bool_param.value = true;
+	conf.bools.emplace_back(bool_param);
+
+	bool_param.name  = "eulerdamp_disabled";
+	bool_param.value = true;
+	conf.bools.emplace_back(bool_param);
+
+	// enbale flags
+	bool_param.name  = "override_contacts";
+	bool_param.value = true;
+	conf.bools.emplace_back(bool_param);
+
+	bool_param.name  = "energy";
+	bool_param.value = true;
+	conf.bools.emplace_back(bool_param);
+
+	bool_param.name  = "fwd_inv";
+	bool_param.value = true;
+	conf.bools.emplace_back(bool_param);
+
+	bool_param.name  = "inv_discrete";
+	bool_param.value = true;
+	conf.bools.emplace_back(bool_param);
+
+	bool_param.name  = "multiccd";
+	bool_param.value = true;
+	conf.bools.emplace_back(bool_param);
+
+	bool_param.name  = "island";
+	bool_param.value = true;
+	conf.bools.emplace_back(bool_param);
+
+	// contact override
+	double_param.name  = "margin";
+	double_param.value = 0.5;
+	conf.doubles.emplace_back(double_param);
+
+	string_param.name  = "solimp";
+	string_param.value = "0.8 0.9 0.1";
+	conf.strs.emplace_back(string_param);
+
+	string_param.name  = "solref";
+	string_param.value = "0.03 1.1";
+	conf.strs.emplace_back(string_param);
+
+	string_param.name  = "friction";
+	string_param.value = "0.5 0.5 0.1 0.1";
+	conf.strs.emplace_back(string_param);
+
+	req.config = conf;
+
+	EXPECT_NE(env_ptr->getModelPtr()->opt.integrator, 2) << "Integrator is already set to the target value!";
+	EXPECT_NE(env_ptr->getModelPtr()->opt.cone, 0) << "Cone is already set to the target value!";
+	EXPECT_NE(env_ptr->getModelPtr()->opt.jacobian, 1) << "Jacobian is already set to the target value!";
+	EXPECT_NE(env_ptr->getModelPtr()->opt.solver, 1) << "Solver is already set to the target value!";
+
+	EXPECT_NE(env_ptr->getModelPtr()->opt.timestep, 0.002) << "Timestep is already set to the target value!";
+	EXPECT_NE(env_ptr->getModelPtr()->opt.iterations, 200) << "Iterations are already set to the target value!";
+	EXPECT_NE(env_ptr->getModelPtr()->opt.tolerance, 1e-7) << "Tolerance is already set to the target value!";
+	EXPECT_NE(env_ptr->getModelPtr()->opt.ls_iterations, 60) << "LS iterations are already set to the target value!";
+	EXPECT_NE(env_ptr->getModelPtr()->opt.ls_tolerance, 0.02) << "LS tolerance is already set to the target value!";
+	EXPECT_NE(env_ptr->getModelPtr()->opt.noslip_iterations, 10)
+	    << "No-slip iterations are already set to the target value!";
+	EXPECT_NE(env_ptr->getModelPtr()->opt.noslip_tolerance, 1e-5)
+	    << "No-slip tolerance is already set to the target value!";
+	EXPECT_NE(env_ptr->getModelPtr()->opt.mpr_iterations, 60) << "MPR iterations are already set to the target value!";
+	EXPECT_NE(env_ptr->getModelPtr()->opt.mpr_tolerance, 1e-5) << "MPR tolerance is already set to the target value!";
+	EXPECT_NE(env_ptr->getModelPtr()->opt.sdf_iterations, 15) << "SDF iterations are already set to the target value!";
+	EXPECT_NE(env_ptr->getModelPtr()->opt.sdf_initpoints, 50) << "SDF init is already set to the target value!";
+
+	EXPECT_NE(env_ptr->getModelPtr()->opt.gravity[0], 9.81) << "Gravity is already set to the target value!";
+	EXPECT_NE(env_ptr->getModelPtr()->opt.gravity[1], 1) << "Gravity is already set to the target value!";
+	EXPECT_NE(env_ptr->getModelPtr()->opt.gravity[2], 2) << "Gravity is already set to the target value!";
+	EXPECT_NE(env_ptr->getModelPtr()->opt.wind[0], 1) << "Wind is already set to the target value!";
+	EXPECT_NE(env_ptr->getModelPtr()->opt.wind[1], 1) << "Wind is already set to the target value!";
+	EXPECT_NE(env_ptr->getModelPtr()->opt.wind[2], 1) << "Wind is already set to the target value!";
+	EXPECT_NE(env_ptr->getModelPtr()->opt.magnetic[0], 0.1) << "Magnetic is already set to the target value!";
+	EXPECT_NE(env_ptr->getModelPtr()->opt.magnetic[1], 0.1) << "Magnetic is already set to the target value!";
+	EXPECT_NE(env_ptr->getModelPtr()->opt.magnetic[2], 0.1) << "Magnetic is already set to the target value!";
+	EXPECT_NE(env_ptr->getModelPtr()->opt.density, 1.2) << "Density is already set to the target value!";
+	EXPECT_NE(env_ptr->getModelPtr()->opt.viscosity, 0.00003) << "Viscosity is already set to the target value!";
+	EXPECT_NE(env_ptr->getModelPtr()->opt.impratio, 1.5) << "Imp ratio is already set to the target value!";
+
+	EXPECT_FALSE(env_ptr->getModelPtr()->opt.disableflags & mjDSBL_CONSTRAINT) << "Constraint is already disabled!";
+	EXPECT_FALSE(env_ptr->getModelPtr()->opt.disableflags & mjDSBL_EQUALITY) << "Equality is already disabled!";
+	EXPECT_FALSE(env_ptr->getModelPtr()->opt.disableflags & mjDSBL_FRICTIONLOSS) << "Friction loss is already disabled!";
+	EXPECT_FALSE(env_ptr->getModelPtr()->opt.disableflags & mjDSBL_LIMIT) << "Limit is already disabled!";
+	EXPECT_FALSE(env_ptr->getModelPtr()->opt.disableflags & mjDSBL_CONTACT) << "Contact is already disabled!";
+	EXPECT_FALSE(env_ptr->getModelPtr()->opt.disableflags & mjDSBL_PASSIVE) << "Passive is already disabled!";
+	EXPECT_FALSE(env_ptr->getModelPtr()->opt.disableflags & mjDSBL_GRAVITY) << "Gravity is already disabled!";
+	EXPECT_FALSE(env_ptr->getModelPtr()->opt.disableflags & mjDSBL_CLAMPCTRL) << "Clamp control is already disabled!";
+	EXPECT_FALSE(env_ptr->getModelPtr()->opt.disableflags & mjDSBL_WARMSTART) << "Warm start is already disabled!";
+	EXPECT_FALSE(env_ptr->getModelPtr()->opt.disableflags & mjDSBL_FILTERPARENT) << "Filter parent is already disabled!";
+	EXPECT_FALSE(env_ptr->getModelPtr()->opt.disableflags & mjDSBL_ACTUATION) << "Actuation is already disabled!";
+	EXPECT_FALSE(env_ptr->getModelPtr()->opt.disableflags & mjDSBL_REFSAFE) << "Ref safe is already disabled!";
+	EXPECT_FALSE(env_ptr->getModelPtr()->opt.disableflags & mjDSBL_SENSOR) << "Sensor is already disabled!";
+	EXPECT_FALSE(env_ptr->getModelPtr()->opt.disableflags & mjDSBL_MIDPHASE) << "Midphase is already disabled!";
+	EXPECT_FALSE(env_ptr->getModelPtr()->opt.disableflags & mjDSBL_EULERDAMP) << "Euler damp is already disabled!";
+
+	EXPECT_FALSE(env_ptr->getModelPtr()->opt.enableflags & mjENBL_OVERRIDE) << "Override contacts are already enabled!";
+	EXPECT_FALSE(env_ptr->getModelPtr()->opt.enableflags & mjENBL_ENERGY) << "Energy is already enabled!";
+	EXPECT_FALSE(env_ptr->getModelPtr()->opt.enableflags & mjENBL_FWDINV) << "Forward inverse is already enabled!";
+	EXPECT_FALSE(env_ptr->getModelPtr()->opt.enableflags & mjENBL_INVDISCRETE) << "Inverse discrete is already enabled!";
+	EXPECT_FALSE(env_ptr->getModelPtr()->opt.enableflags & mjENBL_MULTICCD) << "Multi CCD is already enabled!";
+	EXPECT_FALSE(env_ptr->getModelPtr()->opt.enableflags & mjENBL_ISLAND) << "Island is already enabled!";
+
+	EXPECT_NE(env_ptr->getModelPtr()->opt.o_margin, 0.5) << "Margin is already set to the target value!";
+	EXPECT_NE(env_ptr->getModelPtr()->opt.o_solimp[0], 0.8) << "Solimp is already set to the target value!";
+	EXPECT_NE(env_ptr->getModelPtr()->opt.o_solimp[1], 0.9) << "Solimp is already set to the target value!";
+	EXPECT_NE(env_ptr->getModelPtr()->opt.o_solimp[2], 0.1) << "Solimp is already set to the target value!";
+	EXPECT_NE(env_ptr->getModelPtr()->opt.o_solref[0], 0.03) << "Solref is already set to the target value!";
+	EXPECT_NE(env_ptr->getModelPtr()->opt.o_solref[1], 1.1) << "Solref is already set to the target value!";
+	EXPECT_NE(env_ptr->getModelPtr()->opt.o_friction[0], 0.5) << "Friction is already set to the target value!";
+	EXPECT_NE(env_ptr->getModelPtr()->opt.o_friction[1], 0.5) << "Friction is already set to the target value!";
+	EXPECT_NE(env_ptr->getModelPtr()->opt.o_friction[2], 0.1) << "Friction is already set to the target value!";
+	EXPECT_NE(env_ptr->getModelPtr()->opt.o_friction[3], 0.1) << "Friction is already set to the target value!";
+
+	EXPECT_TRUE(ros::service::call(env_ptr->getHandleNamespace() + "/set_parameters", req, res));
+
+	// Wait for physics thread to update
+	std::this_thread::sleep_for(std::chrono::milliseconds(10));
+	std::lock_guard<std::recursive_mutex> lock(env_ptr->physics_thread_mutex_);
+
+	EXPECT_STREQ(env_ptr->settings_.admin_hash, std::string("new_hash").c_str())
+	    << "Eval mode should have been updated!";
+
+	EXPECT_EQ(env_ptr->getModelPtr()->opt.integrator, 2) << "Integrator should have been updated!";
+	EXPECT_EQ(env_ptr->getModelPtr()->opt.cone, 0) << "Cone should have been updated!";
+	EXPECT_EQ(env_ptr->getModelPtr()->opt.jacobian, 1) << "Jacobian should have been updated!";
+	EXPECT_EQ(env_ptr->getModelPtr()->opt.solver, 1) << "Solver should have been updated!";
+
+	EXPECT_DOUBLE_EQ(env_ptr->getModelPtr()->opt.timestep, 0.002) << "Timestep should have been updated!";
+	EXPECT_EQ(env_ptr->getModelPtr()->opt.iterations, 200) << "Iterations should have been updated!";
+	EXPECT_DOUBLE_EQ(env_ptr->getModelPtr()->opt.tolerance, 1e-7) << "Tolerance should have been updated!";
+	EXPECT_EQ(env_ptr->getModelPtr()->opt.ls_iterations, 60) << "LS iterations should have been updated!";
+	EXPECT_DOUBLE_EQ(env_ptr->getModelPtr()->opt.ls_tolerance, 0.02) << "LS tolerance should have been updated!";
+	EXPECT_EQ(env_ptr->getModelPtr()->opt.noslip_iterations, 10) << "No-slip iterations should have been updated!";
+	EXPECT_DOUBLE_EQ(env_ptr->getModelPtr()->opt.noslip_tolerance, 1e-5)
+	    << "No-slip tolerance should have been updated!";
+	EXPECT_EQ(env_ptr->getModelPtr()->opt.mpr_iterations, 60) << "MPR iterations should have been updated!";
+	EXPECT_DOUBLE_EQ(env_ptr->getModelPtr()->opt.mpr_tolerance, 1e-5) << "MPR tolerance should have been updated!";
+	EXPECT_EQ(env_ptr->getModelPtr()->opt.sdf_iterations, 15) << "SDF iterations should have been updated!";
+	EXPECT_EQ(env_ptr->getModelPtr()->opt.sdf_initpoints, 50) << "SDF init should have been updated!";
+
+	EXPECT_EQ(env_ptr->getModelPtr()->opt.gravity[0], 9.81) << "Gravity should have been updated!";
+	EXPECT_EQ(env_ptr->getModelPtr()->opt.gravity[1], 1) << "Gravity should have been updated!";
+	EXPECT_EQ(env_ptr->getModelPtr()->opt.gravity[2], 2) << "Gravity should have been updated!";
+	EXPECT_EQ(env_ptr->getModelPtr()->opt.wind[0], 1) << "Wind should have been updated!";
+	EXPECT_EQ(env_ptr->getModelPtr()->opt.wind[1], 1) << "Wind should have been updated!";
+	EXPECT_EQ(env_ptr->getModelPtr()->opt.wind[2], 1) << "Wind should have been updated!";
+	EXPECT_EQ(env_ptr->getModelPtr()->opt.magnetic[0], 0.1) << "Magnetic should have been updated!";
+	EXPECT_EQ(env_ptr->getModelPtr()->opt.magnetic[1], 0.1) << "Magnetic should have been updated!";
+	EXPECT_EQ(env_ptr->getModelPtr()->opt.magnetic[2], 0.1) << "Magnetic should have been updated!";
+	EXPECT_DOUBLE_EQ(env_ptr->getModelPtr()->opt.density, 1.2) << "Density should have been updated!";
+	EXPECT_DOUBLE_EQ(env_ptr->getModelPtr()->opt.viscosity, 0.00003) << "Viscosity should have been updated!";
+	EXPECT_DOUBLE_EQ(env_ptr->getModelPtr()->opt.impratio, 1.5) << "Imp ratio should have been updated!";
+
+	EXPECT_TRUE(env_ptr->getModelPtr()->opt.disableflags & mjDSBL_CONSTRAINT) << "Constraint should have been disabled!";
+	EXPECT_TRUE(env_ptr->getModelPtr()->opt.disableflags & mjDSBL_EQUALITY) << "Equality should have been disabled!";
+	EXPECT_TRUE(env_ptr->getModelPtr()->opt.disableflags & mjDSBL_FRICTIONLOSS)
+	    << "Friction loss should have been disabled!";
+	EXPECT_TRUE(env_ptr->getModelPtr()->opt.disableflags & mjDSBL_LIMIT) << "Limit should have been disabled!";
+	EXPECT_TRUE(env_ptr->getModelPtr()->opt.disableflags & mjDSBL_CONTACT) << "Contact should have been disabled!";
+	EXPECT_TRUE(env_ptr->getModelPtr()->opt.disableflags & mjDSBL_PASSIVE) << "Passive should have been disabled!";
+	EXPECT_TRUE(env_ptr->getModelPtr()->opt.disableflags & mjDSBL_GRAVITY) << "Gravity should have been disabled!";
+	EXPECT_TRUE(env_ptr->getModelPtr()->opt.disableflags & mjDSBL_CLAMPCTRL)
+	    << "Clamp control should have been disabled!";
+	EXPECT_TRUE(env_ptr->getModelPtr()->opt.disableflags & mjDSBL_WARMSTART) << "Warm start should have been disabled!";
+	EXPECT_TRUE(env_ptr->getModelPtr()->opt.disableflags & mjDSBL_FILTERPARENT)
+	    << "Filter parent should have been disabled!";
+	EXPECT_TRUE(env_ptr->getModelPtr()->opt.disableflags & mjDSBL_ACTUATION) << "Actuation should have been disabled!";
+	EXPECT_TRUE(env_ptr->getModelPtr()->opt.disableflags & mjDSBL_REFSAFE) << "Ref safe should have been disabled!";
+	EXPECT_TRUE(env_ptr->getModelPtr()->opt.disableflags & mjDSBL_SENSOR) << "Sensor should have been disabled!";
+	EXPECT_TRUE(env_ptr->getModelPtr()->opt.disableflags & mjDSBL_MIDPHASE) << "Midphase should have been disabled!";
+	EXPECT_TRUE(env_ptr->getModelPtr()->opt.disableflags & mjDSBL_EULERDAMP) << "Euler damp should have been disabled!";
+
+	EXPECT_TRUE(env_ptr->getModelPtr()->opt.enableflags & mjENBL_OVERRIDE)
+	    << "Override contacts should have been enabled!";
+	EXPECT_TRUE(env_ptr->getModelPtr()->opt.enableflags & mjENBL_ENERGY) << "Energy should have been enabled!";
+	EXPECT_TRUE(env_ptr->getModelPtr()->opt.enableflags & mjENBL_FWDINV) << "Forward inverse should have been enabled!";
+	EXPECT_TRUE(env_ptr->getModelPtr()->opt.enableflags & mjENBL_INVDISCRETE)
+	    << "Inverse discrete should have been enabled!";
+	EXPECT_TRUE(env_ptr->getModelPtr()->opt.enableflags & mjENBL_MULTICCD) << "Multi CCD should have been enabled!";
+	EXPECT_TRUE(env_ptr->getModelPtr()->opt.enableflags & mjENBL_ISLAND) << "Island should have been enabled!";
+
+	EXPECT_EQ(env_ptr->getModelPtr()->opt.o_margin, 0.5) << "Margin should have been updated!";
+	EXPECT_EQ(env_ptr->getModelPtr()->opt.o_solimp[0], 0.8) << "Solimp should have been updated!";
+	EXPECT_EQ(env_ptr->getModelPtr()->opt.o_solimp[1], 0.9) << "Solimp should have been updated!";
+	EXPECT_EQ(env_ptr->getModelPtr()->opt.o_solimp[2], 0.1) << "Solimp should have been updated!";
+	EXPECT_EQ(env_ptr->getModelPtr()->opt.o_solref[0], 0.03) << "Solref should have been updated!";
+	EXPECT_EQ(env_ptr->getModelPtr()->opt.o_solref[1], 1.1) << "Solref should have been updated!";
+	EXPECT_EQ(env_ptr->getModelPtr()->opt.o_friction[0], 0.5) << "Friction should have been updated!";
+	EXPECT_EQ(env_ptr->getModelPtr()->opt.o_friction[1], 0.5) << "Friction should have been updated!";
+	EXPECT_EQ(env_ptr->getModelPtr()->opt.o_friction[2], 0.1) << "Friction should have been updated!";
+	EXPECT_EQ(env_ptr->getModelPtr()->opt.o_friction[3], 0.1) << "Friction should have been updated!";
 }

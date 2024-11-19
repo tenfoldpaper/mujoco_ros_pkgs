@@ -85,6 +85,9 @@
 #include <tf2_ros/static_transform_broadcaster.h>
 #include <tf2_ros/transform_listener.h>
 
+#include <dynamic_reconfigure/server.h>
+#include <mujoco_ros/SimParamsConfig.h>
+
 #include <rosgraph_msgs/Clock.h>
 
 #include <mujoco_ros/glfw_adapter.h>
@@ -192,6 +195,8 @@ public:
 		std::atomic_int reset_request     = { 0 };
 		std::atomic_int speed_changed     = { 0 };
 		std::atomic_int env_steps_request = { 0 };
+
+		std::atomic_int settings_changed = { 0 };
 
 		// Must be set to true before loading a new model from python
 		std::atomic_int is_python_request = { 0 };
@@ -317,6 +322,12 @@ protected:
 	void runLastStageCbs();
 
 	void notifyGeomChanged(const int geom_id);
+
+	dynamic_reconfigure::Server<mujoco_ros::SimParamsConfig> *param_server_;
+	mujoco_ros::SimParamsConfig sim_params_;
+	boost::recursive_mutex sim_params_mutex_;
+	void dynparamCallback(mujoco_ros::SimParamsConfig &config, uint32_t level);
+	void updateDynamicParams();
 
 	std::vector<ros::ServiceServer> service_servers_;
 	std::unique_ptr<actionlib::SimpleActionServer<mujoco_ros_msgs::StepAction>> action_step_;

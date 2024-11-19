@@ -8,6 +8,7 @@ The default is `min(#available_threads - 1, 4)`.
 * Added profiling of plugin load and callback execution times. For each callback an EMA with sensitivity of 1000 steps is computed. In case a plugin has lower frequency than simulation step size, the callback should set `skip_ema_ = true` when skipping computations.
 Loading and reset times are reported in the server debug log. All plugin stats can be retrieved by the `get_plugin_stats` service call.
 * Added ros laser plugin.
+* Added dynamic reconfigure for all MuJoCo settings for fast model testing.
 
 ### Fixed
 * Added missing call to render callbacks in viewer. While the callbacks were still being run for offscreen rendering, the viewer did not render additional geoms added by plugins.

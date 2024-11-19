@@ -217,6 +217,11 @@ void MujocoEnv::eventLoop()
 			std::unique_lock<std::recursive_mutex> lock(physics_thread_mutex_);
 			now = Clock::now();
 
+			if (settings_.settings_changed.load()) {
+				settings_.settings_changed.store(0);
+				updateDynamicParams();
+			}
+
 			if (settings_.load_request.load() == 1) {
 				ROS_DEBUG("Load request received");
 				loadWithModelAndData();
@@ -426,6 +431,7 @@ void MujocoEnv::completeEnvSetup()
 	mju_zero(ctrlnoise_, model_->nu);
 
 	loadPlugins();
+	updateDynamicParams();
 	ROS_DEBUG("Env setup complete");
 }
 
@@ -539,6 +545,7 @@ bool MujocoEnv::togglePaused(bool paused, const std::string &admin_hash /*= std:
 		}
 		ROS_DEBUG("Request valid. Handling request");
 	}
+	settings_.settings_changed.store(1);
 	settings_.run.store(!paused);
 	if (settings_.run.load())
 		settings_.env_steps_request.store(0);
@@ -779,6 +786,7 @@ void MujocoEnv::prepareReload()
 MujocoEnv::~MujocoEnv()
 {
 	ROS_DEBUG("Destructor called");
+	delete param_server_;
 	connected_viewers_.clear();
 	free(this->ctrlnoise_);
 	this->cb_ready_plugins_.clear();

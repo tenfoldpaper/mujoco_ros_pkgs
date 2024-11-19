@@ -38,6 +38,8 @@
 #include <ros/ros.h>
 #include <ros/package.h>
 #include <mujoco_ros/mujoco_env.h>
+#include <dynamic_reconfigure/server.h>
+#include <mujoco_ros/SimParamsConfig.h>
 #include "test_util.h"
 
 using namespace mujoco_ros;
@@ -50,6 +52,7 @@ public:
 	mjModel *getModelPtr() { return model_.get(); }
 	mjData *getDataPtr() { return data_.get(); }
 	MujocoEnvMutex *getMutexPtr() { return &physics_thread_mutex_; }
+	dynamic_reconfigure::Server<mujoco_ros::SimParamsConfig> *getParamServer() { return param_server_; }
 	int getPendingSteps() { return num_steps_until_exit_; }
 
 	void setEvalMode(bool eval_mode) { settings_.eval_mode = eval_mode; }

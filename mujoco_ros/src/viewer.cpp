@@ -1421,6 +1421,7 @@ void UiEvent(mjuiState *state)
 			// Update flags in env
 			if (!viewer->is_passive_) {
 				viewer->env_->UpdateModelFlags(opt);
+				viewer->env_->settings_.settings_changed.store(true);
 			}
 
 		}
@@ -1883,6 +1884,7 @@ void Viewer::Sync()
 	this->run = env_->settings_.run.load();
 	if (pending_.ui_update_run) {
 		env_->settings_.run.store(1 - env_->settings_.run.load());
+		env_->settings_.settings_changed.store(true);
 		this->run              = env_->settings_.run.load();
 		pending_.ui_update_run = false;
 	}

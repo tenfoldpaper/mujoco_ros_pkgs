@@ -36,6 +36,7 @@ find_package(catkin REQUIRED COMPONENTS
     image_transport
     camera_info_manager
     sensor_msgs
+    dynamic_reconfigure
 )
 
 # cmake-format: off
@@ -75,6 +76,10 @@ find_library(GLFW libglfw.so.3)
 # #   * uncomment the "generate_dynamic_reconfigure_options" section below
 # #     and list every .cfg file to be processed
 
+## Dynamic Reconfigure
+generate_dynamic_reconfigure_options(
+  cfg/SimParams.cfg
+)
 
 # ##################################
 # # catkin specific configuration ##
@@ -98,6 +103,7 @@ catkin_package(
     image_transport
     camera_info_manager
     sensor_msgs
+    dynamic_reconfigure
   INCLUDE_DIRS
     include
   LIBRARIES
@@ -107,6 +113,9 @@ catkin_package(
 )
 
 add_subdirectory(src)
+
+# Depend on gencfg to ensure build before lib
+add_dependencies(${PROJECT_NAME} ${PROJECT_NAME}_gencfg)
 
 # ############
 # # Install ##

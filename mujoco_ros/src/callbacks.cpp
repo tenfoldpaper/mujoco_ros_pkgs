@@ -76,7 +76,7 @@ void MujocoEnv::setupServices()
 
 	service_servers_.emplace_back(nh_->advertiseService<std_srvs::Empty::Request, std_srvs::Empty::Response>(
 	    "load_initial_joint_states", [&](auto /*&req*/, auto /*&res*/) {
-		    std::lock_guard<std::recursive_mutex> lock(physics_thread_mutex_);
+		    boost::lock_guard<std::recursive_mutex> lock(physics_thread_mutex_);
 		    loadInitialJointStates();
 		    return true;
 	    }));
@@ -90,6 +90,206 @@ void MujocoEnv::setupServices()
 	action_step_ = std::make_unique<actionlib::SimpleActionServer<mujoco_ros_msgs::StepAction>>(
 	    *nh_, "step", boost::bind(&MujocoEnv::onStepGoal, this, boost::placeholders::_1), false);
 	action_step_->start();
+
+	param_server_ = new dynamic_reconfigure::Server<mujoco_ros::SimParamsConfig>(sim_params_mutex_, *nh_);
+	param_server_->setCallback(
+	    boost::bind(&MujocoEnv::dynparamCallback, this, boost::placeholders::_1, boost::placeholders::_2));
+}
+
+// Helper function to convert a double array to a space-delimited string
+void arr_to_string(const mjtNum *arr, int size, std::string &str)
+{
+	str.clear();
+	for (int i = 0; i < size; ++i) {
+		str += std::to_string(arr[i]);
+		if (i < size - 1) {
+			str += " ";
+		}
+	}
+}
+
+// TODO(dleins): once changes from python bindings are merged, use MujocoEnvSettings struct instead of passing all these
+// arguments
+void readSimParams(SimParamsConfig &config, mjModel *model_, bool is_running, const std::string &admin_hash)
+{
+	if (model_ != nullptr) {
+		config.running    = is_running;
+		config.admin_hash = admin_hash;
+
+		config.integrator = model_->opt.integrator;
+		config.cone       = model_->opt.cone;
+		config.jacobian   = model_->opt.jacobian;
+		config.solver     = model_->opt.solver;
+
+		config.timestep    = model_->opt.timestep;
+		config.iterations  = model_->opt.iterations;
+		config.tolerance   = model_->opt.tolerance;
+		config.ls_iter     = model_->opt.ls_iterations;
+		config.ls_tol      = model_->opt.ls_tolerance;
+		config.noslip_iter = model_->opt.noslip_iterations;
+		config.noslip_tol  = model_->opt.noslip_tolerance;
+		config.mpr_iter    = model_->opt.mpr_iterations;
+		config.mpr_tol     = model_->opt.mpr_tolerance;
+		config.sdf_iter    = model_->opt.sdf_iterations;
+		config.sdf_init    = model_->opt.sdf_initpoints;
+
+		std::string gravity;
+		arr_to_string(model_->opt.gravity, 3, gravity);
+		config.gravity = gravity;
+
+		std::string wind;
+		arr_to_string(model_->opt.wind, 3, wind);
+		config.wind = wind;
+
+		std::string magnetic;
+		arr_to_string(model_->opt.magnetic, 3, magnetic);
+		config.magnetic = magnetic;
+
+		config.density   = model_->opt.density;
+		config.viscosity = model_->opt.viscosity;
+		config.impratio  = model_->opt.impratio;
+
+		config.constraint_disabled   = ((model_->opt.disableflags & (1 << 0)) != 0);
+		config.equality_disabled     = ((model_->opt.disableflags & (1 << 1)) != 0);
+		config.frictionloss_disabled = ((model_->opt.disableflags & (1 << 2)) != 0);
+		config.limit_disabled        = ((model_->opt.disableflags & (1 << 3)) != 0);
+		config.contact_disabled      = ((model_->opt.disableflags & (1 << 4)) != 0);
+		config.passive_disabled      = ((model_->opt.disableflags & (1 << 5)) != 0);
+		config.gravity_disabled      = ((model_->opt.disableflags & (1 << 6)) != 0);
+		config.clampctrl_disabled    = ((model_->opt.disableflags & (1 << 7)) != 0);
+		config.warmstart_disabled    = ((model_->opt.disableflags & (1 << 8)) != 0);
+		config.filterparent_disabled = ((model_->opt.disableflags & (1 << 9)) != 0);
+		config.actuation_disabled    = ((model_->opt.disableflags & (1 << 10)) != 0);
+		config.refsafe_disabled      = ((model_->opt.disableflags & (1 << 11)) != 0);
+		config.sensor_disabled       = ((model_->opt.disableflags & (1 << 12)) != 0);
+		config.midphase_disabled     = ((model_->opt.disableflags & (1 << 13)) != 0);
+		config.eulerdamp_disabled    = ((model_->opt.disableflags & (1 << 14)) != 0);
+
+		config.override_contacts = ((model_->opt.enableflags & (1 << 0)) != 0);
+		config.energy            = ((model_->opt.enableflags & (1 << 1)) != 0);
+		config.fwd_inv           = ((model_->opt.enableflags & (1 << 2)) != 0);
+		config.inv_discrete      = ((model_->opt.enableflags & (1 << 3)) != 0);
+		config.multiccd          = ((model_->opt.enableflags & (1 << 4)) != 0);
+		config.island            = ((model_->opt.enableflags & (1 << 5)) != 0);
+
+		config.margin = model_->opt.o_margin;
+
+		std::string solimp;
+		arr_to_string(model_->opt.o_solimp, mjNIMP, solimp);
+		config.solimp = solimp;
+
+		std::string solref;
+		arr_to_string(model_->opt.o_solref, mjNREF, solref);
+		config.solref = solref;
+
+		std::string friction;
+		arr_to_string(model_->opt.o_friction, 5, friction);
+		config.friction = friction;
+	}
+}
+
+void MujocoEnv::updateDynamicParams()
+{
+	boost::recursive_mutex::scoped_lock lk(sim_params_mutex_);
+	SimParamsConfig config;
+	readSimParams(config, model_.get(), settings_.run.load(), std::string(settings_.admin_hash));
+	param_server_->updateConfig(config);
+}
+
+// Helper function to set a bit in a flags int
+inline void bit_set_to(int &flags, int bit, bool value)
+{
+	if (value) {
+		flags |= (1 << bit);
+	} else {
+		flags &= ~(1 << bit);
+	}
+}
+
+// Helper function to read size values from a space-delimited string
+inline void set_from_string(mjtNum *vec, std::string str, uint8_t size)
+{
+	uint8_t count = 0;
+	char *pch     = strtok(&str[0], " ");
+	while (pch != nullptr) {
+		if (count < size) {
+			vec[count] = std::stod(pch);
+			count++;
+		} else {
+			ROS_WARN_STREAM("Too many values in string '" << str << "' expected " << size << ". Ignoring the rest.");
+		}
+		pch = strtok(nullptr, " ");
+	}
+	if (count < size - 1) {
+		ROS_WARN_STREAM("Too few values in string '" << str << "' expected " << size << ". Filling with zeros.");
+		for (uint8_t i = count; i < size; i++) {
+			vec[i] = 0;
+		}
+	}
+}
+
+void MujocoEnv::dynparamCallback(mujoco_ros::SimParamsConfig &config, uint32_t level)
+{
+	boost::recursive_mutex::scoped_lock lk(sim_params_mutex_);
+	if (level == 0xFFFFFFFF) {
+		// First call on init -> Set params from model
+		readSimParams(config, model_.get(), settings_.run.load(), std::string(settings_.admin_hash));
+		return;
+	}
+	settings_.run.store(config.running);
+	mju::strcpy_arr(settings_.admin_hash, config.admin_hash.c_str());
+
+	model_->opt.integrator = config.integrator;
+	model_->opt.cone       = config.cone;
+	model_->opt.jacobian   = config.jacobian;
+	model_->opt.solver     = config.solver;
+
+	model_->opt.timestep          = config.timestep;
+	model_->opt.iterations        = config.iterations;
+	model_->opt.tolerance         = config.tolerance;
+	model_->opt.ls_iterations     = config.ls_iter;
+	model_->opt.ls_tolerance      = config.ls_tol;
+	model_->opt.noslip_iterations = config.noslip_iter;
+	model_->opt.noslip_tolerance  = config.noslip_tol;
+	model_->opt.mpr_iterations    = config.mpr_iter;
+	model_->opt.mpr_tolerance     = config.mpr_tol;
+	model_->opt.sdf_iterations    = config.sdf_iter;
+	model_->opt.sdf_initpoints    = config.sdf_init;
+
+	set_from_string(model_->opt.gravity, config.gravity, 3);
+	set_from_string(model_->opt.wind, config.wind, 3);
+	set_from_string(model_->opt.magnetic, config.magnetic, 3);
+	model_->opt.density   = config.density;
+	model_->opt.viscosity = config.viscosity;
+	model_->opt.impratio  = config.impratio;
+
+	bit_set_to(model_->opt.disableflags, 0, config.constraint_disabled);
+	bit_set_to(model_->opt.disableflags, 1, config.equality_disabled);
+	bit_set_to(model_->opt.disableflags, 2, config.frictionloss_disabled);
+	bit_set_to(model_->opt.disableflags, 3, config.limit_disabled);
+	bit_set_to(model_->opt.disableflags, 4, config.contact_disabled);
+	bit_set_to(model_->opt.disableflags, 5, config.passive_disabled);
+	bit_set_to(model_->opt.disableflags, 6, config.gravity_disabled);
+	bit_set_to(model_->opt.disableflags, 7, config.clampctrl_disabled);
+	bit_set_to(model_->opt.disableflags, 8, config.warmstart_disabled);
+	bit_set_to(model_->opt.disableflags, 9, config.filterparent_disabled);
+	bit_set_to(model_->opt.disableflags, 10, config.actuation_disabled);
+	bit_set_to(model_->opt.disableflags, 11, config.refsafe_disabled);
+	bit_set_to(model_->opt.disableflags, 12, config.sensor_disabled);
+	bit_set_to(model_->opt.disableflags, 13, config.midphase_disabled);
+	bit_set_to(model_->opt.disableflags, 14, config.eulerdamp_disabled);
+
+	bit_set_to(model_->opt.enableflags, 0, config.override_contacts);
+	bit_set_to(model_->opt.enableflags, 1, config.energy);
+	bit_set_to(model_->opt.enableflags, 2, config.fwd_inv);
+	bit_set_to(model_->opt.enableflags, 3, config.inv_discrete);
+	bit_set_to(model_->opt.enableflags, 4, config.multiccd);
+	bit_set_to(model_->opt.enableflags, 5, config.island);
+
+	model_->opt.o_margin = config.margin;
+	set_from_string(model_->opt.o_solimp, config.solimp, mjNIMP);
+	set_from_string(model_->opt.o_solref, config.solref, mjNREF);
+	set_from_string(model_->opt.o_friction, config.friction, 5);
 }
 
 void MujocoEnv::onStepGoal(const mujoco_ros_msgs::StepGoalConstPtr &goal)
