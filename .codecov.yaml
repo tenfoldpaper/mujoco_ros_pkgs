@@ -22,3 +22,7 @@ ignore:
   - mujoco_ros/src/offscreen_rendering.cpp
   - mujoco_ros/src/platform_ui_adapter.cc
   - mujoco_ros/src/viewer.cpp
+  - mujoco_ros/test
+  - mujoco_ros_laser/test
+  - mujoco_ros_mocap_plugin/test
+  - mujoco_ros_sensors/test
