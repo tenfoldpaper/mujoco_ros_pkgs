@@ -93,9 +93,9 @@ void MujocoEnv::physicsLoop()
 
 void MujocoEnv::simPausedPhysics(mjtNum &syncSim)
 {
+	const auto startCPU = Clock::now();
 	if (settings_.env_steps_request.load() > 0) { // Action call or arrow keys used for stepping
-		syncSim             = data_->time;
-		const auto startCPU = Clock::now();
+		syncSim = data_->time;
 
 		while (settings_.env_steps_request.load() > 0 &&
 		       (connected_viewers_.empty() ||
@@ -131,6 +131,9 @@ void MujocoEnv::simPausedPhysics(mjtNum &syncSim)
 		// Run mj_forward, to update rendering and joint sliders
 		mj_forward(model_.get(), data_.get());
 		publishSimTime(data_->time);
+		// Sleep for the difference between the lower bound render rate (30Hz) and the time it took to run the forward
+		// step to reduce cpu load
+		std::this_thread::sleep_for(Seconds(mujoco_ros::Viewer::render_ui_rate_lower_bound_) - (Clock::now() - startCPU));
 	}
 }
 
@@ -194,7 +197,7 @@ void MujocoEnv::simUnpausedPhysics(mjtNum &syncSim, std::chrono::time_point<Cloc
 		       (Clock::now() - startCPU < Seconds(mujoco_ros::Viewer::render_ui_rate_lower_bound_) ||
 		        connected_viewers_.empty()) && // only break if rendering UI is actually necessary
 		       !settings_.exit_request.load() &&
-		       num_steps_until_exit_ != 0) {
+		       num_steps_until_exit_ != 0 && settings_.run.load()) {
 			// measure slowdown before first step
 			if (!measured && elapsedSim) {
 				if (settings_.real_time_index != 0) {

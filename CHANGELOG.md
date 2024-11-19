@@ -17,13 +17,15 @@ Loading and reset times are reported in the server debug log. All plugin stats c
 * When loading takes more than 0.25 seconds the simulation is no longer automatically paused.
 * Fixed fetching of body quaternion in `get_body_state` service.
 * *tests*: PendulumEnvFixture now makes sure `mj_forward` has been run at least once. This ensures the data object is populated with correct initial positions and velocities.
-* re-added services for getting and setting gravity, that somehow vanished.
-* fixed flaky tests that did not consider control callbacks being called in paused mode, too (#40).
+* Re-added services for getting and setting gravity, that somehow vanished.
+* Fixed flaky tests that did not consider control callbacks being called in paused mode, too (#40).
+* Fixed bug that would not allow breaking out of *as fast as possible* stepping in headless mode without shutting down the simulation.
 
 ### Changed
 * Moved `mujoco_ros::Viewer::Clock` definition to `mujoco_ros::Clock` (into common_types.h).
 * Increased test coverage of `mujoco_ros_sensors` plugin.
 * Split monolithic ros interface tests into more individual tests.
+* Added sleeping at least until the next lowerbound GUI refresh when paused to reduce cpu load.
 
 Contributors: @DavidPL1
 
