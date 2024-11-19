@@ -569,6 +569,11 @@ void MujocoEnv::loadWithModelAndData()
 	model_.reset(mnew, mj_deleteModel);
 	data_.reset(dnew, mj_deleteData);
 
+	if (model_->opt.integrator == mjINT_EULER) {
+		ROS_WARN("Euler integrator detected. Euler is default for legacy reasons, consider using implicitfast, which is "
+		         "recommended for most applications.");
+	}
+
 	if (threadpool_ != nullptr) {
 		mju_bindThreadPool(data_.get(), threadpool_);
 	}
