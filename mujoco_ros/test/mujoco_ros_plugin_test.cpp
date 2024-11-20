@@ -235,7 +235,6 @@ TEST_F(BaseEnvFixture, FailedLoad)
 	}
 
 	env.shutdown();
-	nh->setParam("should_fail", false);
 }
 
 TEST_F(BaseEnvFixture, FailedLoadRecoverReload)
@@ -328,7 +327,6 @@ TEST_F(BaseEnvFixture, FailedLoadReset)
 	}
 
 	env.shutdown();
-	nh->setParam("should_fail", false);
 }
 
 TEST_F(LoadedPluginFixture, PluginStats_InitialPaused)

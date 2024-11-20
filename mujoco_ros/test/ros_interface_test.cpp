@@ -443,10 +443,6 @@ TEST_F(BaseEnvFixture, CustomInitialJointStates)
 	compare_qvel(d, m->jnt_dofadr[id_free], "ball_freejoint", { 1.0, 2.0, 3.0, 10.0, 20.0, 30.0 });
 
 	env.shutdown();
-
-	nh->deleteParam("initial_joint_positions/joint_map");
-	nh->deleteParam("initial_joint_velocities/joint_map");
-	nh->setParam("unpause", true);
 }
 
 TEST_F(PendulumEnvFixture, CustomInitialJointStatesOnReset)

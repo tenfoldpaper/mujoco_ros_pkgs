@@ -103,7 +103,11 @@ protected:
 		nh->setParam("use_sim_time", true);
 	}
 
-	void TearDown() override {}
+	void TearDown() override
+	{
+		// clean up all parameters
+		ros::param::del(nh->getNamespace());
+	}
 };
 
 class PendulumEnvFixture : public ::testing::Test

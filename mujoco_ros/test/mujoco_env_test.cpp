@@ -61,7 +61,6 @@ TEST_F(BaseEnvFixture, EvalModeWithoutHashThrow)
 	nh->setParam("eval_mode", true);
 	std::string xml_path = ros::package::getPath("mujoco_ros") + "/test/empty_world.xml";
 	EXPECT_THROW(MujocoEnvTestWrapper env, std::runtime_error);
-	nh->setParam("eval_mode", false);
 }
 
 TEST_F(BaseEnvFixture, RunEvalMode)
@@ -81,7 +80,6 @@ TEST_F(BaseEnvFixture, RunEvalMode)
 	EXPECT_FALSE(env.settings_.exit_request) << "Exit request is set before shutdown!";
 
 	env.shutdown();
-	nh->setParam("eval_mode", false);
 }
 
 TEST_F(BaseEnvFixture, EvalPauseWithHash)
@@ -104,7 +102,6 @@ TEST_F(BaseEnvFixture, EvalPauseWithHash)
 	EXPECT_FALSE(env.settings_.run) << "Model should not be running!";
 
 	env.shutdown();
-	nh->setParam("eval_mode", false);
 }
 
 TEST_F(BaseEnvFixture, EvalPauseWithoutHashForbidden)
@@ -127,7 +124,6 @@ TEST_F(BaseEnvFixture, EvalPauseWithoutHashForbidden)
 	EXPECT_TRUE(env.settings_.run) << "Model should still be running!";
 
 	env.shutdown();
-	nh->setParam("eval_mode", false);
 }
 
 TEST_F(BaseEnvFixture, EvalUnpauseWithHash)
@@ -149,7 +145,6 @@ TEST_F(BaseEnvFixture, EvalUnpauseWithHash)
 	EXPECT_TRUE(env.settings_.run) << "Model should be running!";
 
 	env.shutdown();
-	nh->setParam("eval_mode", false);
 }
 
 TEST_F(BaseEnvFixture, StepBeforeLoad)
@@ -200,7 +195,6 @@ TEST_F(BaseEnvFixture, StepSingleWhilePaused)
 	EXPECT_DOUBLE_EQ(env.getDataPtr()->time, env.getModelPtr()->opt.timestep);
 
 	env.shutdown();
-	nh->setParam("unpause", true);
 }
 
 TEST_F(BaseEnvFixture, StepMultiWhilePaused)
@@ -221,7 +215,6 @@ TEST_F(BaseEnvFixture, StepMultiWhilePaused)
 	EXPECT_NEAR(env.getDataPtr()->time, 100 * env.getModelPtr()->opt.timestep, 1e-6);
 
 	env.shutdown();
-	nh->setParam("unpause", true);
 }
 
 TEST_F(BaseEnvFixture, StepUnblocked)
@@ -249,7 +242,6 @@ TEST_F(BaseEnvFixture, StepUnblocked)
 	EXPECT_LT(seconds, 2) << "Time should have passed but ran into 2 seconds timeout!";
 
 	env.shutdown();
-	nh->setParam("unpause", true);
 }
 
 TEST_F(BaseEnvFixture, StepNegativeFail)
@@ -271,7 +263,6 @@ TEST_F(BaseEnvFixture, StepNegativeFail)
 	EXPECT_DOUBLE_EQ(env.getDataPtr()->time, 0.0);
 
 	env.shutdown();
-	nh->setParam("unpause", true);
 }
 
 TEST_F(BaseEnvFixture, Shutdown)
@@ -384,7 +375,6 @@ TEST_F(BaseEnvFixture, PauseUnpause)
 	EXPECT_LT(seconds, 2) << "Time should have been moving forward in unpaused state, ran into 2 seconds timeout!";
 
 	env.shutdown();
-	nh->setParam("unpause", true);
 }
 
 TEST_F(BaseEnvFixture, StepsTerminate)
@@ -420,7 +410,6 @@ TEST_F(BaseEnvFixture, StepsTerminate)
 
 	EXPECT_NEAR(env.getDataPtr()->time, env.getModelPtr()->opt.timestep * 100, env.getModelPtr()->opt.timestep * 0.1)
 	    << "Time should have stopped after 100 steps";
-	nh->deleteParam("num_steps");
 
 	env.shutdown();
 }
@@ -477,7 +466,6 @@ TEST_F(BaseEnvFixture, ManualSteps)
 	    << "Time should have been increased by 100*timestep!";
 
 	env.shutdown();
-	nh->setParam("unpause", true);
 }
 
 TEST_F(BaseEnvFixture, Reset)
@@ -572,7 +560,6 @@ TEST_F(BaseEnvFixture, Reload)
 	}
 
 	env.shutdown();
-	nh->setParam("unpause", false);
 }
 
 TEST_F(BaseEnvFixture, InitModelFromQueuedBuffer)
