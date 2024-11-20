@@ -75,9 +75,18 @@ MujocoEnv::MujocoEnv(const std::string &admin_hash /* = std::string()*/)
 	}
 
 	ROS_DEBUG_COND(!settings_.use_sim_time, "use_sim_time is set to false. Not publishing sim time to /clock!");
+	bool no_x;
 
 	nh_ = std::make_unique<ros::NodeHandle>("~");
 	ROS_DEBUG_STREAM("New MujocoEnv created");
+
+	nh_->param("no_x", no_x, false);
+
+	if (no_x) {
+		ROS_INFO("no_x is set to true. Disabling rendering and setting headless to true");
+		nh_->setParam("headless", true);
+		nh_->setParam("render_offscreen", false);
+	}
 
 	ROS_INFO("Using MuJoCo library version %s", mj_versionString());
 	if (mjVERSION_HEADER != mj_version()) {
@@ -104,19 +113,13 @@ MujocoEnv::MujocoEnv(const std::string &admin_hash /* = std::string()*/)
 		ROS_INFO("Running in normal training mode.");
 	}
 
-	bool no_x;
 	nh_->param<bool>("render_offscreen", settings_.render_offscreen, true);
-	nh_->param<bool>("no_x", no_x, false);
-
-	if (no_x && settings_.render_offscreen) {
-		ROS_WARN("no_x implies offscreen is disabled! Disabling offscreen rendering.");
-		settings_.render_offscreen = false;
+	if (!settings_.render_offscreen) {
+		mjv_makeScene(nullptr, &offscreen_.scn, Viewer::kMaxGeom);
 	}
 
-	bool headless = true;
-	nh_->param<bool>("headless", headless, true);
-	if (!headless) {
-		mjv_makeScene(nullptr, &offscreen_.scn, Viewer::kMaxGeom);
+	nh_->param<bool>("headless", settings_.headless, true);
+	if (!settings_.headless) {
 		gui_adapter_ = new mujoco_ros::GlfwAdapter();
 	}
 
@@ -212,7 +215,7 @@ void MujocoEnv::eventLoop()
 	is_event_running_ = 1;
 	auto now          = Clock::now();
 	auto fps_cap      = Seconds(mujoco_ros::Viewer::render_ui_rate_upper_bound_); // Cap at 60 fps
-	while (ros::ok() && !settings_.exit_request.load() && (!settings_.headless)) {
+	while (ros::ok() && !settings_.exit_request.load()) {
 		{
 			std::unique_lock<std::recursive_mutex> lock(physics_thread_mutex_);
 			now = Clock::now();
