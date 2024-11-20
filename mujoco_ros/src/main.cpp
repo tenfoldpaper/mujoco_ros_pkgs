@@ -138,13 +138,6 @@ int main(int argc, char **argv)
 	// TODO(dleins): Should MuJoCo Plugins be loaded?
 	env = std::make_unique<mujoco_ros::MujocoEnv>(admin_hash);
 
-	bool no_x;
-	nh.param("no_x", no_x, false);
-
-	if (!no_x) {
-		nh.param("headless", no_x, false);
-	}
-
 	// const char *filename = nullptr;
 	if (!filename.empty()) {
 		mju::strcpy_arr(env->queued_filename_, filename.c_str());
@@ -154,7 +147,7 @@ int main(int argc, char **argv)
 	env->startPhysicsLoop();
 	env->startEventLoop();
 
-	if (!no_x) {
+	if (!env->settings_.headless) {
 		// mjvCamera cam;
 		// mjvOption opt;
 		// mjv_defaultCamera(&cam);
