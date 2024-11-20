@@ -20,6 +20,7 @@ Loading and reset times are reported in the server debug log. All plugin stats c
 * Re-added services for getting and setting gravity, that somehow vanished.
 * Fixed flaky tests that did not consider control callbacks being called in paused mode, too (#40).
 * Fixed bug that would not allow breaking out of *as fast as possible* stepping in headless mode without shutting down the simulation.
+* Fixed occasional segfault when offscreen context was freed on shutdown.
 
 ### Changed
 * Moved `mujoco_ros::Viewer::Clock` definition to `mujoco_ros::Clock` (into common_types.h).
