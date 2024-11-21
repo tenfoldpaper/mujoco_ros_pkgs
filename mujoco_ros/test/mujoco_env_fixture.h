@@ -99,7 +99,7 @@ protected:
 	{
 		nh = std::make_unique<ros::NodeHandle>("~");
 		nh->setParam("unpause", true);
-		nh->setParam("no_x", true);
+		nh->setParam("no_render", true);
 		nh->setParam("use_sim_time", true);
 	}
 
@@ -120,7 +120,7 @@ protected:
 	{
 		nh = std::make_unique<ros::NodeHandle>("~");
 		nh->setParam("unpause", false);
-		nh->setParam("no_x", true);
+		nh->setParam("no_render", true);
 		nh->setParam("use_sim_time", true);
 		nh->setParam("sim_steps", -1);
 
@@ -162,7 +162,7 @@ protected:
 	{
 		nh.reset(new ros::NodeHandle("~"));
 		nh->setParam("unpause", false);
-		nh->setParam("no_x", true);
+		nh->setParam("no_render", true);
 		nh->setParam("use_sim_time", true);
 		nh->setParam("sim_steps", -1);
 

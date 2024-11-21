@@ -192,7 +192,9 @@ bool OffscreenCamera::renderAndPubIfNecessary(mujoco_ros::OffscreenRenderContext
 	} else if (depth) {
 		mjr_readPixels(nullptr, offscreen->depth.get(), viewport, &offscreen->con);
 	}
+#ifdef USE_GLFW
 	glfwSwapBuffers(offscreen->window.get());
+#endif
 
 	if (rgb) {
 		// Publish RGB image

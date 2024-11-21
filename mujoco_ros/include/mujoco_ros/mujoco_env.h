@@ -90,8 +90,12 @@
 
 #include <rosgraph_msgs/Clock.h>
 
+#if defined(USE_GLFW)
 #include <mujoco_ros/glfw_adapter.h>
 #include <mujoco_ros/glfw_dispatch.h>
+#elif defined(USE_OSMESA)
+#include <GL/osmesa.h>
+#endif
 
 namespace mujoco_ros {
 
@@ -116,7 +120,15 @@ struct OffscreenRenderContext
 	mjvCamera cam;
 	std::unique_ptr<unsigned char[]> rgb;
 	std::unique_ptr<float[]> depth;
+#ifdef USE_GLFW
 	std::shared_ptr<GLFWwindow> window;
+#elif defined(USE_OSMESA)
+	struct
+	{
+		OSMesaContext ctx;
+		unsigned char buffer[10000000]; // TODO: size necessary or resize later?
+	} osmesa;
+#endif
 	mjrContext con = {};
 	mjvScene scn   = {};
 
@@ -268,7 +280,13 @@ public:
 
 	bool togglePaused(bool paused, const std::string &admin_hash = std::string());
 
+#if defined(USE_GLFW)
 	GlfwAdapter *gui_adapter_ = nullptr;
+#endif
+
+#if defined(USE_EGL) || defined(USE_OSMESA)
+	bool InitGL();
+#endif
 
 	void runRenderCbs(mjvScene *scene);
 	bool step(int num_steps = 1, bool blocking = true);

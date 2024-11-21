@@ -41,8 +41,6 @@
 #include <ros/ros.h>
 #include <image_transport/image_transport.h>
 
-#include <GLFW/glfw3.h>
-
 namespace mujoco_ros {
 
 using Clock = std::chrono::steady_clock;
