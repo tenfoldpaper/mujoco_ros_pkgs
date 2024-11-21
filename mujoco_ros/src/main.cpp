@@ -34,7 +34,6 @@
 
 /* Authors: David P. Leins */
 
-#include <mujoco_ros/glfw_adapter.h>
 #include <mujoco_ros/viewer.h>
 #include <mujoco_ros/mujoco_env.h>
 
@@ -44,6 +43,10 @@
 #include <boost/program_options.hpp>
 #include <csignal>
 #include <thread>
+
+#if defined(USE_GLFW)
+#include <mujoco_ros/glfw_adapter.h>
+#endif
 
 namespace {
 
@@ -147,19 +150,19 @@ int main(int argc, char **argv)
 	env->startPhysicsLoop();
 	env->startEventLoop();
 
+#ifdef USE_GLFW
 	if (!env->settings_.headless) {
-		// mjvCamera cam;
-		// mjvOption opt;
-		// mjv_defaultCamera(&cam);
-		// mjv_defaultOption(&opt);
 		ROS_INFO("Launching viewer");
-		auto viewer =
-		    // std::make_unique<mujoco_ros::Viewer>(std::unique_ptr<mujoco_ros::PlatformUIAdapter>(env->gui_adapter_),
-		    //                                      env.get(), &cam, &opt, /* is_passive = */ false);
-		    std::make_unique<mujoco_ros::Viewer>(std::unique_ptr<mujoco_ros::PlatformUIAdapter>(env->gui_adapter_),
-		                                         env.get(), /* is_passive = */ false);
+		auto viewer = std::make_unique<mujoco_ros::Viewer>(
+		    std::unique_ptr<mujoco_ros::PlatformUIAdapter>(env->gui_adapter_), env.get(), /* is_passive = */ false);
 		viewer->RenderLoop();
-	} else {
+	}
+#else
+	if (!env->settings_.headless) {
+		ROS_ERROR("GLFW backend not available. Cannot launch viewer");
+	}
+#endif
+	else {
 		ROS_INFO("Running headless");
 	}
 

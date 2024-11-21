@@ -43,12 +43,23 @@
 #include <stdexcept>
 #include <sstream>
 
+#if defined(USE_GLFW)
+static std::string render_backend = "GLFW";
+#elif defined(USE_OSMESA)
+static std::string render_backend = "OSMESA";
+#elif defined(USE_EGL)
+static std::string render_backend = "EGL";
+#else
+static std::string render_backend = "NONE. No offscreen rendering available.";
+#endif
+
 namespace mujoco_ros {
 namespace mju = ::mujoco::sample_util;
 
 using Seconds      = std::chrono::duration<double>;
 using Milliseconds = std::chrono::duration<double, std::milli>;
 
+#ifdef USE_GLFW
 namespace {
 int MaybeGlfwInit()
 {
@@ -62,6 +73,7 @@ int MaybeGlfwInit()
 	return is_initialized;
 }
 } // namespace
+#endif
 
 MujocoEnv *MujocoEnv::instance = nullptr;
 
@@ -75,15 +87,19 @@ MujocoEnv::MujocoEnv(const std::string &admin_hash /* = std::string()*/)
 	}
 
 	ROS_DEBUG_COND(!settings_.use_sim_time, "use_sim_time is set to false. Not publishing sim time to /clock!");
-	bool no_x;
+	bool no_render;
 
 	nh_ = std::make_unique<ros::NodeHandle>("~");
 	ROS_DEBUG_STREAM("New MujocoEnv created");
 
-	nh_->param("no_x", no_x, false);
+	nh_->param("no_render", no_render, false);
+	if (nh_->hasParam("no_x")) {
+		ROS_WARN("The 'no_x' parameter is deprecated. Use 'no_render' instead.");
+		nh_->param("no_x", no_render, no_render);
+	}
 
-	if (no_x) {
-		ROS_INFO("no_x is set to true. Disabling rendering and setting headless to true");
+	if (no_render) {
+		ROS_INFO("no_render is set. Disabling rendering and setting headless to true");
 		nh_->setParam("headless", true);
 		nh_->setParam("render_offscreen", false);
 	}
@@ -93,6 +109,7 @@ MujocoEnv::MujocoEnv(const std::string &admin_hash /* = std::string()*/)
 		ROS_WARN_STREAM("Headers and library have different versions (headers: " << mjVERSION_HEADER
 		                                                                         << ", library: " << mj_version() << ")");
 	}
+	ROS_INFO_STREAM("Compiled with render backend: " << render_backend);
 
 	if (!admin_hash.empty()) {
 		mju::strcpy_arr(settings_.admin_hash, admin_hash.c_str());
@@ -120,7 +137,11 @@ MujocoEnv::MujocoEnv(const std::string &admin_hash /* = std::string()*/)
 
 	nh_->param<bool>("headless", settings_.headless, true);
 	if (!settings_.headless) {
+#if defined(USE_GLFW)
 		gui_adapter_ = new mujoco_ros::GlfwAdapter();
+#else
+		ROS_ERROR("Compiled without GLFW support. Cannot run in non-headless mode.");
+#endif
 	}
 
 	if (settings_.use_sim_time) {
@@ -137,9 +158,23 @@ MujocoEnv::MujocoEnv(const std::string &admin_hash /* = std::string()*/)
 	mjv_defaultPerturb(&pert_);
 
 	if (settings_.render_offscreen) {
-		MaybeGlfwInit();
-		ROS_DEBUG("Starting offscreen render thread");
-		offscreen_.render_thread_handle = boost::thread(&MujocoEnv::offscreenRenderLoop, this);
+		bool can_render = true;
+
+#if defined(USE_GLFW)
+		can_render = MaybeGlfwInit();
+		ROS_ERROR_COND(!can_render, "Failed to initialize GLFW. Cannot render offscreen!");
+#elif !defined(USE_EGL) && !defined(USE_OSMESA)
+		ROS_ERROR("No rendering backend available. Cannot render offscreen!");
+		can_render = false;
+#endif
+
+		if (!can_render) {
+			settings_.render_offscreen = false;
+			ROS_ERROR("Disabling offscreen rendering");
+		} else {
+			ROS_DEBUG("Starting offscreen render thread");
+			offscreen_.render_thread_handle = boost::thread(&MujocoEnv::offscreenRenderLoop, this);
+		}
 	}
 
 	nh_->param<int>("num_steps", num_steps_until_exit_, -1);

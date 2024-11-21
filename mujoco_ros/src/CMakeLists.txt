@@ -9,30 +9,32 @@ target_include_directories(lodepng PRIVATE
 target_link_libraries(lodepng PRIVATE project_option)
 add_library(mujoco_ros::lodepng ALIAS lodepng)
 
-add_library(platform_ui_adapter OBJECT
-  $<TARGET_OBJECTS:lodepng>
-  glfw_adapter.cc
-  glfw_dispatch.cc
-  platform_ui_adapter.cc
-)
-set_property(TARGET platform_ui_adapter PROPERTY POSITION_INDEPENDENT_CODE ON)
-target_include_directories(platform_ui_adapter PUBLIC
-  ${PROJECT_SOURCE_DIR}/include
-  ${GLFW_INTERFACE_INCLUDE_DIRECTORIES}
-)
-target_link_libraries(platform_ui_adapter
-  PUBLIC
-    mujoco::mujoco
-    ${GLFW}
-  PRIVATE
-    mujoco_ros::lodepng
-    project_option
-    project_warning
-)
-add_library(mujoco_ros::platform_ui_adapter ALIAS platform_ui_adapter)
+if(RENDERING_BACKEND STREQUAL "USE_GLFW")
+  add_library(platform_ui_adapter OBJECT
+    $<TARGET_OBJECTS:lodepng>
+    glfw_adapter.cc
+    glfw_dispatch.cc
+    platform_ui_adapter.cc
+  )
+  set_property(TARGET platform_ui_adapter PROPERTY POSITION_INDEPENDENT_CODE ON)
+  target_include_directories(platform_ui_adapter PUBLIC
+    ${PROJECT_SOURCE_DIR}/include
+    ${GLFW_INTERFACE_INCLUDE_DIRECTORIES}
+  )
+  target_link_libraries(platform_ui_adapter
+    PUBLIC
+      mujoco::mujoco
+      ${GLFW}
+    PRIVATE
+      mujoco_ros::lodepng
+      project_option
+      project_warning
+  )
+  add_library(mujoco_ros::platform_ui_adapter ALIAS platform_ui_adapter)
+endif()
 
 add_library(${PROJECT_NAME}
-  $<TARGET_OBJECTS:platform_ui_adapter>
+  $<TARGET_OBJECTS:lodepng>
   mujoco_env.cpp
   viewer.cpp
   plugin_utils.cpp
@@ -41,6 +43,14 @@ add_library(${PROJECT_NAME}
   callbacks.cpp
   physics.cpp
 )
+
+if(RENDERING_BACKEND STREQUAL "USE_GLFW")
+  target_sources(${PROJECT_NAME} PRIVATE $<TARGET_OBJECTS:platform_ui_adapter>)
+endif()
+
+if (RENDERING_BACKEND)
+  target_compile_definitions(${PROJECT_NAME} PUBLIC ${RENDERING_BACKEND}=1)
+endif()
 
 target_include_directories(${PROJECT_NAME}
   PUBLIC ${PROJECT_SOURCE_DIR}/include
@@ -53,13 +63,19 @@ target_include_directories(${PROJECT_NAME}
 target_link_libraries(${PROJECT_NAME}
   PUBLIC
    mujoco::mujoco
-   mujoco_ros::platform_ui_adapter
    catkin_pkg
   PRIVATE
-   mujoco_ros::lodepng
    project_option
    project_warning
 )
+
+if(RENDERING_BACKEND STREQUAL "USE_GLFW")
+  target_link_libraries(${PROJECT_NAME} PUBLIC mujoco_ros::platform_ui_adapter)
+elseif(RENDERING_BACKEND STREQUAL "USE_EGL")
+  target_link_libraries(${PROJECT_NAME} PUBLIC OpenGL::EGL)
+elseif(RENDERING_BACKEND STREQUAL "USE_OSMESA")
+  target_link_libraries(${PROJECT_NAME} PUBLIC OSMesa::OSMesa)
+endif()
 
 # Node Executable
 add_executable(mujoco_node

@@ -26,7 +26,7 @@ if(NOT mujoco_FOUND)
 	# Find dependencies
 	cmake_policy(SET CMP0072 NEW)
 	include(CMakeFindDependencyMacro)
-	find_dependency(OpenGL REQUIRED)
+	find_package(OpenGL)
 
 	if(mujoco_INCLUDE_DIRS AND mujoco_LIBRARIES)
 		set(mujoco_FOUND TRUE)

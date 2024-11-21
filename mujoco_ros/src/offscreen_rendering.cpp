@@ -40,17 +40,48 @@
 
 #include <sstream>
 
+#ifdef USE_EGL
+#include <EGL/egl.h>
+#endif
+
 namespace mujoco_ros {
 
 OffscreenRenderContext::~OffscreenRenderContext()
 {
+#if defined(USE_GLFW)
 	if (window != nullptr) {
-		ROS_DEBUG("Freeing offscreen context");
+		ROS_DEBUG("Freeing GLFW offscreen context");
 		std::unique_lock<std::mutex> lock(render_mutex);
 		request_pending.store(false);
 		mjr_defaultContext(&con);
 		mjr_freeContext(&con);
 	}
+#elif defined(USE_EGL)
+	ROS_DEBUG("Freeing EGL offscreen context");
+	mjr_defaultContext(&con);
+	mjr_freeContext(&con);
+	EGLDisplay display = eglGetDisplay(EGL_DEFAULT_DISPLAY);
+	if (display != EGL_NO_DISPLAY) {
+		// Get current context
+		EGLContext current_context = eglGetCurrentContext();
+
+		// Release context
+		eglMakeCurrent(display, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
+
+		// Destroy context if valid
+		if (current_context != EGL_NO_CONTEXT) {
+			eglDestroyContext(display, current_context);
+		}
+
+		// Terminate display
+		eglTerminate(display);
+	}
+#elif defined(USE_OSMESA)
+	ROS_DEBUG("Freeing OSMESA offscreen context");
+	mjr_defaultContext(&con);
+	mjr_freeContext(&con);
+	OSMesaDestroyContext(osmesa.ctx);
+#endif
 }
 
 void MujocoEnv::initializeRenderResources()
@@ -122,9 +153,11 @@ void MujocoEnv::initializeRenderResources()
 
 	ROS_DEBUG_NAMED("offscreen_rendering", "Initializing offscreen rendering utils");
 
+#ifdef USE_GLFW
 	Glfw().glfwMakeContextCurrent(offscreen_.window.get());
 	// Glfw().glfwSetWindowSize(offscreen_.window.get(), max_res_w, max_res_h);
 	glfwSetWindowSize(offscreen_.window.get(), max_res_w, max_res_h);
+#endif
 
 	mjr_makeContext(this->model_.get(), &offscreen_.con, 50);
 	ROS_DEBUG_NAMED("offscreen_rendering", "\tApplied model to context");
@@ -132,9 +165,93 @@ void MujocoEnv::initializeRenderResources()
 	mjr_setBuffer(mjFB_OFFSCREEN, &offscreen_.con);
 }
 
+#if defined(USE_EGL)
+bool MujocoEnv::InitGL()
+{
+	ROS_DEBUG("Initializing EGL...");
+	// clang-format off
+	const EGLint config[] = {
+		EGL_RED_SIZE,		   8,
+		EGL_GREEN_SIZE,		   8,
+		EGL_BLUE_SIZE,		   8,
+		EGL_ALPHA_SIZE,		   8,
+		EGL_DEPTH_SIZE,		   24,
+		EGL_STENCIL_SIZE,	   8,
+		EGL_COLOR_BUFFER_TYPE, EGL_RGB_BUFFER,
+		EGL_SURFACE_TYPE, 	   EGL_PBUFFER_BIT,
+		EGL_RENDERABLE_TYPE,   EGL_OPENGL_BIT,
+		EGL_NONE };
+	// clang-format on
+
+	// Get Display
+	EGLDisplay display = eglGetDisplay(EGL_DEFAULT_DISPLAY);
+	if (display == EGL_NO_DISPLAY) {
+		ROS_ERROR_STREAM("Failed to get EGL display. Error type: " << eglGetError());
+		return false;
+	}
+
+	// Initialize EGL
+	EGLint major, minor;
+	if (eglInitialize(display, &major, &minor) != EGL_TRUE) {
+		ROS_ERROR_STREAM("Failed to initialize EGL. Error type: " << eglGetError());
+		return false;
+	}
+
+	// Choose Config
+	EGLint num_configs;
+	EGLConfig egl_config;
+	if (eglChooseConfig(display, config, &egl_config, 1, &num_configs) != EGL_TRUE) {
+		ROS_ERROR_STREAM("Failed to choose EGL config. Error type: " << eglGetError());
+		return false;
+	}
+
+	// bind OpenGL API
+	if (eglBindAPI(EGL_OPENGL_API) != EGL_TRUE) {
+		ROS_ERROR_STREAM("Failed to bind OpenGL API. Error type: " << eglGetError());
+		return false;
+	}
+
+	// Create context
+	EGLContext context = eglCreateContext(display, egl_config, EGL_NO_CONTEXT, nullptr);
+	if (context == EGL_NO_CONTEXT) {
+		ROS_ERROR_STREAM("Failed to create EGL context. Error type: " << eglGetError());
+		return false;
+	}
+
+	// Make current
+	if (eglMakeCurrent(display, EGL_NO_SURFACE, EGL_NO_SURFACE, context) != EGL_TRUE) {
+		ROS_ERROR_STREAM("Failed to make EGL context current. Error type: " << eglGetError());
+		return false;
+	}
+
+	ROS_DEBUG("EGL initialized");
+	return true;
+}
+#elif defined(USE_OSMESA)
+bool MujocoEnv::InitGL()
+{
+	ROS_DEBUG("Initializing OSMesa...");
+	// Initialize OSMesa
+	offscreen_.osmesa.ctx = OSMesaCreateContextExt(GL_RGBA, 24, 8, 8, 0);
+	if (!offscreen_.osmesa.ctx) {
+		ROS_ERROR("OSMesa context creation failed");
+		return false;
+	}
+
+	// Make current
+	// if (!OSMesaMakeCurrent(offscreen_.osmesa.ctx, offscreen_.osmesa.buffer, GL_UNSIGNED_BYTE, width, height)) {
+	if (!OSMesaMakeCurrent(offscreen_.osmesa.ctx, offscreen_.osmesa.buffer, GL_UNSIGNED_BYTE, 800, 800)) {
+		ROS_ERROR("OSMesa make current failed");
+		return false;
+	}
+	ROS_DEBUG("OSMesa initialized");
+	return true;
+} // InitGL
+#endif
+
 void MujocoEnv::offscreenRenderLoop()
 {
-	is_rendering_running_ = 1;
+#if defined(USE_GLFW)
 	Glfw().glfwWindowHint(GLFW_DOUBLEBUFFER, GLFW_FALSE);
 	Glfw().glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE);
 	offscreen_.window.reset(Glfw().glfwCreateWindow(800, 600, "Invisible window", nullptr, nullptr),
@@ -150,7 +267,22 @@ void MujocoEnv::offscreenRenderLoop()
 
 	Glfw().glfwMakeContextCurrent(offscreen_.window.get());
 	Glfw().glfwSwapInterval(0);
+#elif defined(USE_EGL)
+	if (!InitGL()) {
+		ROS_ERROR("Failed to initialize EGL. Cannot run offscreen rendering");
+		return;
+	}
+#elif defined(USE_OSMESA)
+	if (!InitGL()) {
+		ROS_ERROR("Failed to initialize OSMesa. Cannot run offscreen rendering");
+		return;
+	}
+#else
+	ROS_ERROR("No offscreen rendering backend available. Cannot run offscreen rendering");
+	return;
+#endif
 
+	is_rendering_running_ = 1;
 	ROS_DEBUG_NAMED("offscreen_rendering", "Creating offscreen rendering resources ...");
 	mjv_defaultCamera(&offscreen_.cam);
 	// Set to fixed camera

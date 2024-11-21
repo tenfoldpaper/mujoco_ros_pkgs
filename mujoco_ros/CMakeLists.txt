@@ -21,6 +21,10 @@ set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 list(APPEND CMAKE_MODULE_PATH "${PROJECT_SOURCE_DIR}/cmake")
 include(ProjectOption)
 
+option(NO_GLFW "Disable GLFW3 support and try finding OpenGL EGL or OSMESA for offscreen rendering" OFF)
+option(USE_EGL "Build with EGL enabled offscreen rendering. Entails `NO_GLFW`" OFF)
+option(USE_OSMESA "Build with OSMESA enabled offscreen rendering. Entails `NO_GLFW`" OFF)
+
 # Find catkin macros and libraries
 # if COMPONENTS list like find_package(catkin REQUIRED COMPONENTS xyz)
 # is used, also find other catkin packages
@@ -60,7 +64,35 @@ configure_project_option(
 
 # Find MuJoCo
 find_package(mujoco 3.2.0 REQUIRED)
-find_library(GLFW libglfw.so.3)
+find_library(GLFW libglfw.so.3) # Find GLFW3 for GUI
+
+
+if (NO_GLFW OR USE_EGL OR USE_OSMESA OR ${GLFW} STREQUAL "GLFW-NOTFOUND")
+  message(WARNING "GLFW3 not found or disabled. GUI will not be available.")
+
+  find_package(OpenGL COMPONENTS OpenGL EGL) # Find OpenGL (EGL) for offscreen rendering
+  if (USE_OSMESA OR ${OpenGL_EGL_FOUND} STREQUAL "FALSE")
+    message(WARNING "EGL not found or disabled. Falling back to OSMESA.")
+
+    find_package(OSMesa)
+
+    if (!OSMesa_FOUND)
+      message(WARNING "EGL disabled or not found and OSMesa could not be found. Offscreen rendering will not be available!")
+    else() # OSMesa found
+      set(RENDERING_BACKEND "USE_OSMESA")
+      message(STATUS "OSMesa found. Offscreen rendering available.")
+    endif()
+
+  else() # EGL found
+    set(RENDERING_BACKEND "USE_EGL")
+    message(STATUS "EGL found. Offscreen rendering available.")
+  endif()
+
+else() # GLFW found
+  set(RENDERING_BACKEND "USE_GLFW")
+  message(STATUS "GLFW3 found. GUI and offscreen rendering available.")
+endif()
+
 
 # ###############################################
 # # Declare ROS dynamic reconfigure parameters ##

@@ -27,6 +27,7 @@ Loading and reset times are reported in the server debug log. All plugin stats c
 * Increased test coverage of `mujoco_ros_sensors` plugin.
 * Split monolithic ros interface tests into more individual tests.
 * Added sleeping at least until the next lowerbound GUI refresh when paused to reduce cpu load.
+* deprecated `no_x` launchparameter in favor of using `no_render`, as offscreen rendering now is also available without X.
 
 Contributors: @DavidPL1
 
