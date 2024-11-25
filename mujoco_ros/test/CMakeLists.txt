@@ -51,7 +51,25 @@ target_link_libraries(mujoco_ros_plugin_test
   project_warning
 )
 
+add_rostest_gtest(mujoco_render_test
+  launch/mujoco_render.test
+  mujoco_render_test.cpp
+)
+
+add_dependencies(mujoco_render_test
+  ${${PROJECT_NAME}_EXPORTED_TARGETS}
+  ${catkin_EXPORTED_TARGETS}
+)
+
+target_link_libraries(mujoco_render_test
+  mujoco_ros
+  project_option
+  project_warning
+)
+
 install(FILES
   empty_world.xml
+  equality_world.xml
+  camera_world.xml
   DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}/test
 )
