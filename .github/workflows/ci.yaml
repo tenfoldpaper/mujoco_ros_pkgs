@@ -21,6 +21,7 @@ jobs:
       fail-fast: false
       matrix:
         distro: [noetic, one]
+        render_backend: [USE_GLFW, USE_OSMESA, USE_EGL]
         mujoco: [3.2.0]
         include:
           - distro: noetic
@@ -32,6 +33,15 @@ jobs:
             mujoco: 3.2.0
             env:
               CLANG_TIDY: pedantic
+        exclude:
+          - distro: one
+            render_backend: USE_EGL # requires GPU
+          - distro: one
+            render_backend: USE_GLFW # requires Xvfb
+          - distro: noetic
+            render_backend: USE_GLFW
+          - distro: noetic
+            render_backend: USE_EGL
 
     env:
       BUILDER: colcon
@@ -55,6 +65,7 @@ jobs:
       TARGET_CMAKE_ARGS: >
         -DCMAKE_BUILD_TYPE=${{ matrix.env.CCOV && 'Debug' || 'Release'}}
         -DCMAKE_CXX_FLAGS="-Werror $CXXFLAGS${{ matrix.env.CCOV && ' --coverage -O2 -fno-omit-frame-pointer'}}"
+        -D${{ matrix.render_backend }}=ON
       UPSTREAM_CMAKE_ARGS: -DCMAKE_CXX_FLAGS= -DCMAKE_CXX_STANDARD=17
 
       CCACHE_DIR: ${{ github.workspace }}/.ccache
@@ -69,7 +80,7 @@ jobs:
       CATKIN_LINT: ${{ matrix.env.CATKIN_LINT || 'false' }}
       CCOV: ${{ matrix.env.CCOV || 'false' }}
 
-    name: "${{ matrix.distro }} mj-${{ matrix.mujoco }}${{ matrix.env.CATKIN_LINT && ' + catkin_lint' || ''}}${{ matrix.env.CCOV && ' + ccov' || ''}}${{ matrix.env.CLANG_TIDY && (github.event_name != 'workflow_dispatch' && ' + clang-tidy (delta)' || ' + clang-tidy (all)') || '' }}"
+    name: "${{ matrix.distro }} mj-${{ matrix.mujoco }} ${{ matrix.render_backend }} ${{ matrix.env.CATKIN_LINT && ' + catkin_lint' || ''}}${{ matrix.env.CCOV && ' + ccov' || ''}}${{ matrix.env.CLANG_TIDY && (github.event_name != 'workflow_dispatch' && ' + clang-tidy (delta)' || ' + clang-tidy (all)') || '' }}"
     runs-on: ubuntu-20.04
     steps:
       - uses: actions/checkout@v4
@@ -114,7 +125,7 @@ jobs:
         uses: actions/upload-artifact@v4
         if: failure() && (steps.ici.outputs.run_target_test || steps.ici.outputs.target_test_results)
         with:
-          name: test-results-${{ matrix.distro }}
+          name: test-results-${{ matrix.distro }}-${{ matrix.render_backend }}
           path: ${{ env.BASEDIR }}/target_ws/**/test_results/**/*.xml
       - name: Generate codecov report
         uses: rhaschke/lcov-action@main
@@ -123,11 +134,12 @@ jobs:
           docker: $DOCKER_IMAGE
           workdir: ${{ env.BASEDIR }}/target_ws
           ignore: '"*/target_ws/build/*" "*/target_ws/install/*" "*/test/*"'
+          output: ${{ env.BASEDIR }}/target_ws/coverage-${{ matrix.distro }}-${{ matrix.render_backend }}.info
       - name: Upload codecov report
         uses: codecov/codecov-action@v5
         if: always() && matrix.env.CCOV && steps.ici.outputs.target_test_results == '0'
         with:
-          files: ${{ env.BASEDIR }}/target_ws/coverage.info
+          files: ${{ env.BASEDIR }}/target_ws/coverage-${{ matrix.distro }}-${{ matrix.render_backend }}.info
       - name: Upload clang-tidy changes
         uses: rhaschke/upload-git-patch-action@main
         if: always() && matrix.env.CLANG_TIDY
