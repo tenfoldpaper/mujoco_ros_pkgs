@@ -341,9 +341,9 @@ protected:
 
 	void notifyGeomChanged(const int geom_id);
 
+	boost::recursive_mutex sim_params_mutex_;
 	dynamic_reconfigure::Server<mujoco_ros::SimParamsConfig> *param_server_;
 	mujoco_ros::SimParamsConfig sim_params_;
-	boost::recursive_mutex sim_params_mutex_;
 	void dynparamCallback(mujoco_ros::SimParamsConfig &config, uint32_t level);
 	void updateDynamicParams();
 

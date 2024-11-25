@@ -607,6 +607,9 @@ void MujocoEnv::loadWithModelAndData()
 	model_.reset(mnew, mj_deleteModel);
 	data_.reset(dnew, mj_deleteData);
 
+	// perform a forward pass to initialize all fields if not done yet (very important for offscreen rendering)
+	mj_forward(model_.get(), data_.get());
+
 	if (model_->opt.integrator == mjINT_EULER) {
 		ROS_WARN("Euler integrator detected. Euler is default for legacy reasons, consider using implicitfast, which is "
 		         "recommended for most applications.");

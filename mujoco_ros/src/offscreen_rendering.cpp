@@ -305,8 +305,10 @@ void MujocoEnv::offscreenRenderLoop()
 			// Wait for render request
 			std::unique_lock<std::mutex> lock(offscreen_.render_mutex);
 			// ROS_DEBUG_NAMED("offscreen_rendering", "Waiting for render request");
-			offscreen_.cond_render_request.wait(
-			    lock, [this] { return offscreen_.request_pending.load() || settings_.visual_init_request.load(); });
+			offscreen_.cond_render_request.wait(lock, [this] {
+				return offscreen_.request_pending.load() || settings_.visual_init_request.load() ||
+				       settings_.exit_request.load();
+			});
 
 			// In case of exit request after waiting for render request
 			if (!ros::ok() || settings_.exit_request.load()) {
@@ -317,6 +319,7 @@ void MujocoEnv::offscreenRenderLoop()
 				ROS_DEBUG_NAMED("offscreen_rendering", "Initializing render resources");
 				initializeRenderResources();
 				settings_.visual_init_request = false;
+				continue;
 			}
 
 			for (const auto &cam_ptr : offscreen_.cams) {
