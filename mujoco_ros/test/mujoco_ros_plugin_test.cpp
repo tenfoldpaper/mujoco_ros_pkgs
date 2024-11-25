@@ -147,20 +147,20 @@ TEST_F(BaseEnvFixture, LoadPlugin)
 {
 	nh->setParam("unpause", false);
 	std::string xml_path = ros::package::getPath("mujoco_ros") + "/test/empty_world.xml";
-	MujocoEnvTestWrapper env;
+	env_ptr              = std::make_unique<MujocoEnvTestWrapper>("");
 
-	env.startWithXML(xml_path);
+	env_ptr->startWithXML(xml_path);
 
 	float seconds = 0;
-	while (env.getOperationalStatus() != 0 && seconds < 2) {
+	while (env_ptr->getOperationalStatus() != 0 && seconds < 2) {
 		std::this_thread::sleep_for(std::chrono::milliseconds(1));
 		seconds += 0.001;
 	}
 	EXPECT_LT(seconds, 2) << "Env loading ran into 2 seconds timeout!";
-	EXPECT_EQ(env.getPlugins().size(), 1) << "Env should have 1 plugin registered!";
-	EXPECT_EQ(env.getNumCBReadyPlugins(), 1) << "Env should have 1 plugin loaded!";
+	EXPECT_EQ(env_ptr->getPlugins().size(), 1) << "Env should have 1 plugin registered!";
+	EXPECT_EQ(env_ptr->getNumCBReadyPlugins(), 1) << "Env should have 1 plugin loaded!";
 
-	env.shutdown();
+	env_ptr->shutdown();
 }
 
 TEST_F(LoadedPluginFixture, ResetPlugin)
@@ -200,24 +200,24 @@ TEST_F(BaseEnvFixture, FailedLoad)
 	nh->setParam("should_fail", true);
 
 	std::string xml_path = ros::package::getPath("mujoco_ros") + "/test/empty_world.xml";
-	MujocoEnvTestWrapper env;
+	env_ptr              = std::make_unique<MujocoEnvTestWrapper>("");
 
-	env.startWithXML(xml_path);
+	env_ptr->startWithXML(xml_path);
 
 	float seconds = 0;
-	while (env.getOperationalStatus() != 0 && seconds < 2) {
+	while (env_ptr->getOperationalStatus() != 0 && seconds < 2) {
 		std::this_thread::sleep_for(std::chrono::milliseconds(1));
 		seconds += 0.001;
 	}
 	EXPECT_LT(seconds, 2) << "Env loading ran into 2 seconds timeout!";
 
-	EXPECT_EQ(env.getPlugins().size(), 1) << "Env should have 1 plugin registered!";
-	EXPECT_EQ(env.getNumCBReadyPlugins(), 0) << "Env should have 0 plugins loaded!";
+	EXPECT_EQ(env_ptr->getPlugins().size(), 1) << "Env should have 1 plugin registered!";
+	EXPECT_EQ(env_ptr->getNumCBReadyPlugins(), 0) << "Env should have 0 plugins loaded!";
 
 	{
 		TestPlugin *test_plugin = nullptr;
 
-		auto &plugins = env.getPlugins();
+		auto &plugins = env_ptr->getPlugins();
 		for (const auto &p : plugins) {
 			test_plugin = dynamic_cast<TestPlugin *>(p.get());
 			if (test_plugin != nullptr) {
@@ -234,7 +234,7 @@ TEST_F(BaseEnvFixture, FailedLoad)
 		EXPECT_FALSE(test_plugin->ran_on_geom_changed_cb.load());
 	}
 
-	env.shutdown();
+	env_ptr->shutdown();
 }
 
 TEST_F(BaseEnvFixture, FailedLoadRecoverReload)
@@ -242,24 +242,24 @@ TEST_F(BaseEnvFixture, FailedLoadRecoverReload)
 	nh->setParam("should_fail", true);
 
 	std::string xml_path = ros::package::getPath("mujoco_ros") + "/test/empty_world.xml";
-	MujocoEnvTestWrapper env;
+	env_ptr              = std::make_unique<MujocoEnvTestWrapper>("");
 
-	env.startWithXML(xml_path);
+	env_ptr->startWithXML(xml_path);
 
 	float seconds = 0;
-	while (env.getOperationalStatus() != 0 && seconds < 2) {
+	while (env_ptr->getOperationalStatus() != 0 && seconds < 2) {
 		std::this_thread::sleep_for(std::chrono::milliseconds(1));
 		seconds += 0.001;
 	}
 	EXPECT_LT(seconds, 2) << "Env loading ran into 2 seconds timeout!";
 
-	EXPECT_EQ(env.getPlugins().size(), 1) << "Env should have 1 plugin registered!";
-	EXPECT_EQ(env.getNumCBReadyPlugins(), 0) << "Env should have 0 plugins loaded!";
+	EXPECT_EQ(env_ptr->getPlugins().size(), 1) << "Env should have 1 plugin registered!";
+	EXPECT_EQ(env_ptr->getNumCBReadyPlugins(), 0) << "Env should have 0 plugins loaded!";
 
 	{
 		TestPlugin *test_plugin = nullptr;
 
-		auto &plugins = env.getPlugins();
+		auto &plugins = env_ptr->getPlugins();
 		for (const auto &p : plugins) {
 			test_plugin = dynamic_cast<TestPlugin *>(p.get());
 			if (test_plugin != nullptr) {
@@ -269,18 +269,18 @@ TEST_F(BaseEnvFixture, FailedLoadRecoverReload)
 
 		nh->setParam("should_fail", false);
 
-		env.settings_.load_request = 2;
-		float seconds              = 0;
-		while (env.getOperationalStatus() != 0 && seconds < 2) {
+		env_ptr->settings_.load_request = 2;
+		float seconds                   = 0;
+		while (env_ptr->getOperationalStatus() != 0 && seconds < 2) {
 			std::this_thread::sleep_for(std::chrono::milliseconds(1));
 			seconds += 0.001;
 		}
 		EXPECT_LT(seconds, 2) << "Env reset ran into 2 seconds timeout!";
-		EXPECT_EQ(env.getPlugins().size(), 1) << "Env should have 1 plugin registered!";
-		EXPECT_EQ(env.getNumCBReadyPlugins(), 1) << "Env should have 1 plugin loaded!";
+		EXPECT_EQ(env_ptr->getPlugins().size(), 1) << "Env should have 1 plugin registered!";
+		EXPECT_EQ(env_ptr->getNumCBReadyPlugins(), 1) << "Env should have 1 plugin loaded!";
 	}
 
-	env.shutdown();
+	env_ptr->shutdown();
 }
 
 TEST_F(BaseEnvFixture, FailedLoadReset)
@@ -289,24 +289,24 @@ TEST_F(BaseEnvFixture, FailedLoadReset)
 	nh->setParam("unpause", false);
 
 	std::string xml_path = ros::package::getPath("mujoco_ros") + "/test/empty_world.xml";
-	MujocoEnvTestWrapper env;
+	env_ptr              = std::make_unique<MujocoEnvTestWrapper>("");
 
-	env.startWithXML(xml_path);
+	env_ptr->startWithXML(xml_path);
 
 	float seconds = 0;
-	while (env.getOperationalStatus() != 0 && seconds < 2) {
+	while (env_ptr->getOperationalStatus() != 0 && seconds < 2) {
 		std::this_thread::sleep_for(std::chrono::milliseconds(1));
 		seconds += 0.001;
 	}
 	EXPECT_LT(seconds, 2) << "Env loading ran into 2 seconds timeout!";
 
-	EXPECT_EQ(env.getPlugins().size(), 1) << "Env should have 1 plugin registered!";
-	EXPECT_EQ(env.getNumCBReadyPlugins(), 0) << "Env should have 0 plugins loaded!";
+	EXPECT_EQ(env_ptr->getPlugins().size(), 1) << "Env should have 1 plugin registered!";
+	EXPECT_EQ(env_ptr->getNumCBReadyPlugins(), 0) << "Env should have 0 plugins loaded!";
 
 	{
 		TestPlugin *test_plugin = nullptr;
 
-		auto &plugins = env.getPlugins();
+		auto &plugins = env_ptr->getPlugins();
 		for (const auto &p : plugins) {
 			test_plugin = dynamic_cast<TestPlugin *>(p.get());
 			if (test_plugin != nullptr) {
@@ -314,19 +314,19 @@ TEST_F(BaseEnvFixture, FailedLoadReset)
 			}
 		}
 
-		env.settings_.reset_request = 1;
-		float seconds               = 0;
-		while (env.settings_.reset_request != 0 && seconds < 2) {
+		env_ptr->settings_.reset_request = 1;
+		float seconds                    = 0;
+		while (env_ptr->settings_.reset_request != 0 && seconds < 2) {
 			std::this_thread::sleep_for(std::chrono::milliseconds(1));
 			seconds += 0.001;
 		}
 		EXPECT_LT(seconds, 2) << "Env reset ran into 2 seconds timeout!";
-		env.step(10);
+		env_ptr->step(10);
 
 		EXPECT_FALSE(test_plugin->ran_reset.load()) << "Dummy plugin should not have beeon reset!";
 	}
 
-	env.shutdown();
+	env_ptr->shutdown();
 }
 
 TEST_F(LoadedPluginFixture, PluginStats_InitialPaused)

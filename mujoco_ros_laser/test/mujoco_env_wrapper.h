@@ -77,7 +77,7 @@ public:
 
 	const std::string &getHandleNamespace() { return nh_->getNamespace(); }
 
-	void startWithXML(const std::string &xml_path)
+	void startWithXML(const std::string &xml_path, bool wait = false)
 	{
 		mju::strcpy_arr(queued_filename_, xml_path.c_str());
 		settings_.load_request = 2;

@@ -81,12 +81,22 @@ public:
 
 	const std::string &getHandleNamespace() { return nh_->getNamespace(); }
 
-	void startWithXML(const std::string &xml_path)
+	void startWithXML(const std::string &xml_path, bool wait = true, float timeout_secs = 2.)
 	{
 		mju::strcpy_arr(queued_filename_, xml_path.c_str());
 		settings_.load_request = 2;
 		startPhysicsLoop();
 		startEventLoop();
+
+		if (not wait)
+			return;
+
+		// Wait for model to be loaded
+		float seconds = 0;
+		while (getOperationalStatus() != 0 && seconds < timeout_secs) { // wait for model to be loaded or timeout
+			std::this_thread::sleep_for(std::chrono::milliseconds(1));
+			seconds += 0.001;
+		}
 	}
 };
 
@@ -94,6 +104,7 @@ class BaseEnvFixture : public ::testing::Test
 {
 protected:
 	std::unique_ptr<ros::NodeHandle> nh;
+	std::unique_ptr<MujocoEnvTestWrapper> env_ptr;
 
 	void SetUp() override
 	{
@@ -105,6 +116,9 @@ protected:
 
 	void TearDown() override
 	{
+		if (env_ptr != nullptr) {
+			env_ptr->shutdown();
+		}
 		// clean up all parameters
 		ros::param::del(nh->getNamespace());
 	}
