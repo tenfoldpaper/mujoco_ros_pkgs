@@ -63,6 +63,8 @@ public:
 	int isEventRunning() { return is_event_running_; }
 	int isRenderingRunning() { return is_rendering_running_; }
 
+	OffscreenRenderContext *getOffscreenContext() { return &offscreen_; }
+
 	int getNumCBReadyPlugins() { return cb_ready_plugins_.size(); }
 	void notifyGeomChange() { notifyGeomChanged(0); }
 
