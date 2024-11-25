@@ -409,15 +409,15 @@ TEST_F(BaseEnvFixture, CustomInitialJointStates)
 	nh->setParam("initial_joint_positions/joint_map", pos_map);
 	nh->setParam("initial_joint_velocities/joint_map", vel_map);
 
-	MujocoEnvTestWrapper env;
-	env.startWithXML(xml_path);
+	env_ptr = std::make_unique<MujocoEnvTestWrapper>("");
+	env_ptr->startWithXML(xml_path);
 
-	while (env.getOperationalStatus() > 0) { // wait for reset to be done
+	while (env_ptr->getOperationalStatus() > 0) { // wait for reset to be done
 		std::this_thread::sleep_for(std::chrono::milliseconds(1));
 	}
 
-	mjData *d  = env.getDataPtr();
-	mjModel *m = env.getModelPtr();
+	mjData *d  = env_ptr->getDataPtr();
+	mjModel *m = env_ptr->getModelPtr();
 
 	int id_balljoint, id1, id2, id_free;
 
@@ -442,7 +442,7 @@ TEST_F(BaseEnvFixture, CustomInitialJointStates)
 	compare_qvel(d, m->jnt_dofadr[id2], "joint2", { 1.05 });
 	compare_qvel(d, m->jnt_dofadr[id_free], "ball_freejoint", { 1.0, 2.0, 3.0, 10.0, 20.0, 30.0 });
 
-	env.shutdown();
+	env_ptr->shutdown();
 }
 
 TEST_F(PendulumEnvFixture, CustomInitialJointStatesOnReset)
