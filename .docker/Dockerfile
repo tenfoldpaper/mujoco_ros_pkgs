@@ -45,6 +45,7 @@ RUN apt-get -q update && \
     apt-get -q -y dist-upgrade && \
     # Install common dependencies
     DEBIAN_FRONTEND=noninteractive apt-get -q install --no-install-recommends -y \
+        libgles2-mesa-dev libosmesa6-dev libglfw3-dev \
         curl git sudo python3-vcstool \
         $(test "${ROS_DISTRO}" = "noetic" && echo "python3-catkin-tools" || echo "python3-colcon-common-extensions") \
         clang clang-format clang-tidy clang-tools \
