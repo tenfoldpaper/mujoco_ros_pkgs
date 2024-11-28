@@ -165,11 +165,9 @@ bool OffscreenCamera::shouldRender(const ros::Time &t)
 bool OffscreenCamera::renderAndPubIfNecessary(mujoco_ros::OffscreenRenderContext *offscreen, const bool rgb,
                                               const bool depth, const bool segment)
 {
-	if ((!rgb && !depth) || // nothing to render
-	    (rgb_pub_.getNumSubscribers() == 0 && depth_pub_.getNumSubscribers() == 0) || // no subscribers
-	    (!rgb && depth_pub_.getNumSubscribers() == 0) ||
-	    (!depth && ((rgb_pub_.getNumSubscribers() == 0 && !segment) || // would render depth but no depth subscribers
-	                (segment && segment_pub_.getNumSubscribers() == 0)))) { // would render rgb but no rgb subscribers
+	bool rgb_or_s = rgb || segment;
+
+	if (!rgb_or_s && !depth) { // Nothing to render
 		return false;
 	}
 
@@ -185,18 +183,18 @@ bool OffscreenCamera::renderAndPubIfNecessary(mujoco_ros::OffscreenRenderContext
 	// Render to buffer
 	mjr_render(viewport, &offscreen->scn, &offscreen->con);
 	// read buffers
-	if (rgb && depth) {
+	if (rgb_or_s && depth) {
 		mjr_readPixels(offscreen->rgb.get(), offscreen->depth.get(), viewport, &offscreen->con);
-	} else if (rgb) {
+	} else if (rgb_or_s) {
 		mjr_readPixels(offscreen->rgb.get(), nullptr, viewport, &offscreen->con);
-	} else if (depth) {
+	} else { // depth only
 		mjr_readPixels(nullptr, offscreen->depth.get(), viewport, &offscreen->con);
 	}
 #ifdef USE_GLFW
 	glfwSwapBuffers(offscreen->window.get());
 #endif
 
-	if (rgb) {
+	if (rgb_or_s) {
 		// Publish RGB image
 		sensor_msgs::ImagePtr rgb_msg = boost::make_shared<sensor_msgs::Image>();
 		rgb_msg->header.frame_id      = cam_name_ + "_optical_frame";
@@ -266,38 +264,23 @@ void OffscreenCamera::renderAndPublish(mujoco_ros::OffscreenRenderContext *offsc
 	last_pub_     = ros::Time(scn_state_.data.time);
 	bool rendered = false;
 
-	bool segment = stream_type_ & streamType::SEGMENTED;
-	bool rgb     = stream_type_ & streamType::RGB;
-	bool depth   = stream_type_ & streamType::DEPTH;
+	bool segment = stream_type_ & streamType::SEGMENTED && segment_pub_.getNumSubscribers() > 0;
+	bool rgb     = stream_type_ & streamType::RGB && rgb_pub_.getNumSubscribers() > 0;
+	bool depth   = stream_type_ & streamType::DEPTH && depth_pub_.getNumSubscribers() > 0;
 
 	offscreen->cam.fixedcamid = cam_id_;
 
-	// Render RGB and DEPTH image
-	if (rgb && depth) {
+	// If rgb and segment are requested, we need to run two low-level render passes (segment is rgb with a different
+	// flag).
+	if (rgb && segment) { // first render RGB and maybe DEPTH, then SEGMENTED
 		offscreen->scn.flags[mjRND_SEGMENT] = 0;
-		rendered                            = renderAndPubIfNecessary(offscreen, true, true, false);
-
-		// Render segmentation image additionally to RGB and DEPTH
-		if (segment) {
-			offscreen->scn.flags[mjRND_SEGMENT] = 1;
-			rendered                            = rendered || renderAndPubIfNecessary(offscreen, true, false, true);
-		}
-	} else if (segment && depth) { // DEPTH and SEGMENTED
-		offscreen->scn.flags[mjRND_SEGMENT] = 1;
-		rendered                            = renderAndPubIfNecessary(offscreen, true, true, true);
-	} else if (rgb && segment) { // RGB and SEGMENTED
-		// Needs two calls, because both go into the rgb buffer
-		offscreen->scn.flags[mjRND_SEGMENT] = 0;
-		rendered                            = renderAndPubIfNecessary(offscreen, true, false, false);
+		rendered                            = renderAndPubIfNecessary(offscreen, true, depth, false);
 
 		offscreen->scn.flags[mjRND_SEGMENT] = 1;
-		rendered                            = rendered || renderAndPubIfNecessary(offscreen, true, false, true);
-	} else if (rgb) { // RGB only
-		offscreen->scn.flags[mjRND_SEGMENT] = 0;
-		rendered                            = renderAndPubIfNecessary(offscreen, true, false, false);
-	} else { // Only DEPTH or SEGMENTED
-		offscreen->scn.flags[mjRND_SEGMENT] = 1;
-		rendered                            = renderAndPubIfNecessary(offscreen, segment, true, segment);
+		rendered                            = renderAndPubIfNecessary(offscreen, false, false, true) || rendered;
+	} else { // render maybe RGB/SEGMENTED and maybe DEPTH
+		offscreen->scn.flags[mjRND_SEGMENT] = segment;
+		rendered                            = renderAndPubIfNecessary(offscreen, rgb, depth, segment);
 	}
 
 	if (rendered) {
