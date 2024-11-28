@@ -21,6 +21,7 @@ Loading and reset times are reported in the server debug log. All plugin stats c
 * Fixed flaky tests that did not consider control callbacks being called in paused mode, too (#40).
 * Fixed bug that would not allow breaking out of *as fast as possible* stepping in headless mode without shutting down the simulation.
 * Fixed occasional segfault when offscreen context was freed on shutdown.
+* Fixed segmented image never being rendered/published.
 
 ### Changed
 * Moved `mujoco_ros::Viewer::Clock` definition to `mujoco_ros::Clock` (into common_types.h).
@@ -28,6 +29,7 @@ Loading and reset times are reported in the server debug log. All plugin stats c
 * Split monolithic ros interface tests into more individual tests.
 * Added sleeping at least until the next lowerbound GUI refresh when paused to reduce cpu load.
 * deprecated `no_x` launchparameter in favor of using `no_render`, as offscreen rendering now is also available without X.
+* Optimized camera render configurations where RGB, Segmented and Depth streams are active, but only Segmented and Depth are subscribed. Previously, this would result in two separate low-level render calls, now it's done in one.
 
 Contributors: @DavidPL1
 
