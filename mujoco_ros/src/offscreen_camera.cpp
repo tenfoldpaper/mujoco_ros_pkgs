@@ -55,6 +55,7 @@ OffscreenCamera::OffscreenCamera(const uint8_t cam_id, const std::string &base_t
                                  mujoco_ros::MujocoEnv *env_ptr)
     : cam_id_(cam_id)
     , cam_name_(cam_name)
+    , topic_(base_topic)
     , width_(width)
     , height_(height)
     , stream_type_(stream_type)
