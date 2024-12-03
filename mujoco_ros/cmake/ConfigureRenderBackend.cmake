@@ -4,7 +4,7 @@ find_library(GLFW libglfw.so.3) # Find GLFW3 for GUI
 
 set(RENDER_BACKEND "ANY" CACHE STRING "Choose rendering backend")
 set_property(CACHE RENDER_BACKEND PROPERTY STRINGS "ANY" "USE_GLFW" "USE_EGL" "USE_OSMESA")
-message(message "configured RENDER_BACKEND: ${RENDER_BACKEND}")
+message(STATUS "configured RENDER_BACKEND: ${RENDER_BACKEND}")
 
 if (RENDER_BACKEND STREQUAL "ANY")
   unset(NO_GLFW)
