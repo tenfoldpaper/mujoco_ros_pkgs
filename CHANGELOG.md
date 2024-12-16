@@ -24,6 +24,7 @@ Loading and reset times are reported in the server debug log. All plugin stats c
 * Fixed bug that would not allow breaking out of *as fast as possible* stepping in headless mode without shutting down the simulation.
 * Fixed occasional segfault when offscreen context was freed on shutdown.
 * Fixed segmented image never being rendered/published.
+* Fixed thread synchronization between MujocoEnv and Viewer.
 * Occasional startup hiccups with GUI mode where the rendered environment would remain empty have been fixed (race condition with loading on separate threads).
 * Fixed copyright notice dates.
 
