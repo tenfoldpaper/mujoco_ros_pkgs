@@ -33,6 +33,10 @@ jobs:
             mujoco: 3.2.0
             env:
               CLANG_TIDY: pedantic
+        exclude:
+          # Disable EGL on noetic until we have a proper solution for accessing the GPU
+          - distro: noetic
+            render_backend: EGL
 
     env:
       BUILDER: colcon
