@@ -9,15 +9,19 @@ endif()
 
 if(NOT mujoco_FOUND)
 	message(STATUS "Looking for MuJoCo tar install ...")
+	# Initialize MUJOCO_DIR from environment variable if not yet set as cmake variable
+	if(NOT DEFINED MUJOCO_DIR)
+		set(MUJOCO_DIR $ENV{MUJOCO_DIR} CACHE PATH "Path to MuJoCo installation directory")
+	endif()
 	# Find headers
-	find_file(mujoco_INCLUDE_DIRS include/mujoco/mujoco.h PATHS ENV MUJOCO_DIR)
+	find_file(mujoco_INCLUDE_DIRS include/mujoco/mujoco.h PATHS ${MUJOCO_DIR})
 	if(mujoco_INCLUDE_DIRS)
 		get_filename_component(mujoco_INCLUDE_DIRS ${mujoco_INCLUDE_DIRS} PATH)
 		get_filename_component(mujoco_INCLUDE_DIRS ${mujoco_INCLUDE_DIRS} PATH)
 	endif()
 
 	# Find library
-	find_library(mujoco_LIBRARIES lib/libmujoco.so PATHS ENV MUJOCO_DIR)
+	find_library(mujoco_LIBRARIES lib/libmujoco.so PATHS ${MUJOCO_DIR})
 
 	# Find dependencies
 	cmake_policy(SET CMP0072 NEW)
