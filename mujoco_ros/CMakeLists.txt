@@ -213,7 +213,7 @@ if (ROS_VERSION EQUAL "1")
   #   add_subdirectory(test)
   # endif()
 else()
-  install(DIRECTORY include/ DESTINATION include/${PROJECT_NAME})
+  install(DIRECTORY include/ DESTINATION include/)
 
   install(DIRECTORY launch/ros2/launch config assets
     DESTINATION share/${PROJECT_NAME}
@@ -224,6 +224,26 @@ else()
     RUNTIME DESTINATION lib/${PROJECT_NAME}
     ARCHIVE DESTINATION lib/${PROJECT_NAME}
   )
+  
+  ament_export_include_directories(
+    include
+  )
+  ament_export_dependencies(
+    ament_cmake
+    rclcpp
+    pluginlib
+    tf2
+    tf2_ros
+    image_transport
+    camera_info_manager
+    geometry_msgs
+    tf2_geometry_msgs
+    mujoco_ros_msgs
+    rosgraph_msgs
+    sensor_msgs
+    std_srvs
+  )
+
 
   ament_package()
 endif()
